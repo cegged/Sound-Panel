@@ -5,20 +5,19 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import { PlusIcon, SearchIcon } from "@components/Icons";
 import { classNameFactory } from "@utils/css";
-import { Logger } from "@utils/Logger";
 import { classes } from "@utils/misc";
 import { showToast, useState } from "@webpack/common";
 import type { CSSProperties, ReactNode } from "react";
 
 import { addFiles, LibraryKind } from "../data/library";
-import { SearchIcon, UploadIcon } from "./icons";
+import { showError } from "../utils/logger";
+import { UploadIcon } from "./icons";
 
 export const cl = classNameFactory("vc-soundpanel-");
 
-const logger = new Logger("SoundPanel");
-
-export async function importFiles(files: File[], kind: LibraryKind) {
+async function importFiles(files: File[], kind: LibraryKind) {
     if (!files.length) return;
 
     try {
@@ -28,12 +27,11 @@ export async function importFiles(files: File[], kind: LibraryKind) {
         if (added) showToast({ text: `Added ${added} file${added === 1 ? "" : "s"} to ${target}`, variant: "success" });
         if (skipped) showToast({ text: `Skipped ${skipped} file${skipped === 1 ? "" : "s"} that ${skipped === 1 ? "isn't" : "aren't"} audio`, variant: "critical" });
     } catch (err) {
-        logger.error("Failed to import files", err);
-        showToast({ text: "Couldn't save the files", variant: "critical" });
+        showError("Couldn't save the files", err);
     }
 }
 
-export function pickFiles(kind: LibraryKind) {
+function pickFiles(kind: LibraryKind) {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "audio/*";
@@ -45,7 +43,7 @@ export function pickFiles(kind: LibraryKind) {
 export function UploadButton({ kind, label }: { kind: LibraryKind; label: string; }) {
     return (
         <button type="button" className={cl("action-button", "primary")} onClick={() => pickFiles(kind)}>
-            <UploadIcon size={16} />
+            <PlusIcon width={16} height={16} />
             <span>{label}</span>
         </button>
     );
@@ -76,7 +74,7 @@ export function FileDropZone({ kind, children }: { kind: LibraryKind; children: 
             {children}
             {dragging && (
                 <div className={cl("dropzone-overlay")}>
-                    <UploadIcon size={32} />
+                    <span className={cl("dropzone-icon")}><UploadIcon size={24} /></span>
                     <span>Drop audio files to add them to {kind === "music" ? "Music" : "My Sounds"}</span>
                 </div>
             )}
@@ -87,7 +85,7 @@ export function FileDropZone({ kind, children }: { kind: LibraryKind; children: 
 export function SearchBox({ value, onChange, placeholder }: { value: string; onChange(value: string): void; placeholder: string; }) {
     return (
         <label className={cl("search")}>
-            <SearchIcon size={16} />
+            <SearchIcon width={16} height={16} />
             <input
                 type="text"
                 value={value}
@@ -162,4 +160,11 @@ export function EmptyState({ icon, title, children }: { icon: ReactNode; title: 
 
 export function matchesQuery(name: string, query: string) {
     return name.toLowerCase().includes(query.trim().toLowerCase());
+}
+
+export function formatTime(seconds: number) {
+    if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
+
+    const total = Math.floor(seconds);
+    return `${Math.floor(total / 60)}:${(total % 60).toString().padStart(2, "0")}`;
 }

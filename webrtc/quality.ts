@@ -5,14 +5,11 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { Logger } from "@utils/Logger";
-
 import { settings } from "../settings";
+import { logger } from "../utils/logger";
 
-// Video quality tweaks for Discord's WebRTC voice engine on the desktop app. Discord tunes that engine for
-// browsers: a fixed 2.5 Mbps video cap, a 720p 30 FPS camera, and video scaled down to each viewer's tile size
-
-const logger = new Logger("SoundPanel");
+// Discord tunes its WebRTC engine for browsers: video capped at 2.5 Mbps, a 720p camera,
+// and everything scaled down to the size viewers display it at
 
 interface VideoQuality {
     width: number;
@@ -46,23 +43,17 @@ interface WebRTCConnection {
     videoStreamParameters: StreamParameter[];
 }
 
-// Discord's own limits: the answer SDP video cap, the camera budget and the top Go Live budget
-const SDP_VIDEO_BITRATE_KBPS = 2500;
-const CAMERA_BITRATE_MIN = 2_500_000;
-const CAMERA_BITRATE_MAX = 6_000_000;
+const SDP_BITRATE_KBPS = 2500;
+const CAMERA_BITRATE = { min: 2_500_000, max: 6_000_000 };
 const STREAM_BITRATE_MAX = 9_000_000;
 
-// What the camera is asked for in max quality mode; the camera delivers its best mode up to this
-const CAMERA_TARGET = { width: 1920, height: 1080, frameRate: 60 };
-
-const isMaxQuality = () => settings.store.maxVideoQuality;
+const maxQuality = () => settings.store.maxVideoQuality;
 
 const readConstraint = (value: unknown) =>
     typeof value === "number" ? value : (value as ConstrainDoubleRange | undefined)?.ideal ?? (value as ConstrainDoubleRange | undefined)?.max;
 
-// Runs after the WebRTC connection sets a screen input. It only passes width and height on, so the frame rate
-// stays at the 30 FPS default and the max resolution and frame rate reported to the voice server stay 720p 30
-// (that's the quality badge viewers see). Do what Discord's native connection does instead
+// Setting a screen input only tells the quality manager the size. Without the frame rate the stream stays at
+// 30 FPS, and the server keeps the initial 720p 30 as the stream's quality, which is also what viewers see
 export function syncGoLiveQuality(connection: WebRTCConnection, constraints: MediaTrackConstraints, highBitrate: number, lowBitrate: number) {
     try {
         const width = readConstraint(constraints.width);
@@ -86,68 +77,59 @@ export function syncGoLiveQuality(connection: WebRTCConnection, constraints: Med
     }
 }
 
-const cameraBitrate = (width: number, height: number, framerate: number) =>
-    Math.min(CAMERA_BITRATE_MAX, Math.max(CAMERA_BITRATE_MIN, Math.round(width * height * framerate * 0.1)));
-
-// Runs at the start of every quality update. In max quality mode, pin encoding to the full size and frame rate of
-// what is captured, so Discord stops scaling video down to viewers' tile sizes and stops cutting the camera's
-// frame rate after 15 seconds of silence
+// Pins encoding to whatever is captured, so video isn't shrunk to viewers' tiles and the camera
+// keeps its frame rate when you've been quiet for a while
 export function applyMaxVideoQuality(connection: WebRTCConnection) {
     try {
         const manager = connection.videoQualityManager;
-        if (!isMaxQuality()) {
+        if (!maxQuality()) {
             if (manager.qualityOverwrite) manager.setQualityOverwrite(undefined);
             return;
         }
 
         const track = connection.input?.getVideoStream?.()?.getVideoTracks()[0];
-        if (!track || track.readyState !== "live") return;
+        if (track?.readyState !== "live") return;
 
         const { width, height, frameRate } = track.getSettings();
         if (!width || !height) return;
 
         const framerate = Math.round(frameRate || 30);
-        const bitrateMax = connection.context === "stream" ? STREAM_BITRATE_MAX : cameraBitrate(width, height, framerate);
-        const quality = { width, height, framerate };
+        const bitrateMax = connection.context === "stream"
+            ? STREAM_BITRATE_MAX
+            : Math.min(CAMERA_BITRATE.max, Math.max(CAMERA_BITRATE.min, Math.round(width * height * framerate * 0.1)));
 
+        const quality = { width, height, framerate };
         manager.setQualityOverwrite({ encode: quality, capture: quality, bitrateMax, bitrateMin: Math.round(bitrateMax / 4) });
     } catch (err) {
         logger.error("Failed to apply max video quality", err);
     }
 }
 
-// Discord's WebRTC answer SDP caps video at x-google-max-bitrate=2500 (kbps) for every connection, which holds
-// video far below the bitrate Discord's own quality manager allows. Raise it to the budget actually in use
+// Replaces the answer SDP's fixed 2500 kbps video cap with the budget actually in use
 export function getVideoBitrateKbps(connection: Partial<WebRTCConnection> | undefined) {
     let bitrate: number | undefined;
 
     if (connection?.context === "stream") {
-        bitrate = isMaxQuality() ? STREAM_BITRATE_MAX : connection.videoQualityManager?.goliveMaxQuality?.bitrateMax;
-    } else if (connection?.context === "default" && isMaxQuality()) {
-        bitrate = CAMERA_BITRATE_MAX;
+        bitrate = maxQuality() ? STREAM_BITRATE_MAX : connection.videoQualityManager?.goliveMaxQuality?.bitrateMax;
+    } else if (connection?.context === "default" && maxQuality()) {
+        bitrate = CAMERA_BITRATE.max;
     }
 
-    return bitrate ? Math.max(SDP_VIDEO_BITRATE_KBPS, Math.round(bitrate / 1000)) : SDP_VIDEO_BITRATE_KBPS;
+    return bitrate ? Math.max(SDP_BITRATE_KBPS, Math.round(bitrate / 1000)) : SDP_BITRATE_KBPS;
 }
 
-// Chromium starts its bandwidth estimate around 300 kbps and ramps up slowly, lowering the resolution meanwhile.
-// Start raised video at Discord's usual video bitrate instead
+// Chromium starts estimating bandwidth at ~300 kbps and climbs slowly, lowering the resolution until then
 export function getStartBitrateParam(maxBitrateKbps: number) {
-    return maxBitrateKbps > SDP_VIDEO_BITRATE_KBPS ? `;x-google-start-bitrate=${SDP_VIDEO_BITRATE_KBPS}` : "";
+    return maxBitrateKbps > SDP_BITRATE_KBPS ? `;x-google-start-bitrate=${SDP_BITRATE_KBPS}` : "";
 }
 
-// Discord asks the camera for 1280 pixels wide only. In max quality mode, ask for the camera's best mode
+// Discord only asks the camera for 1280 pixels wide; ask for its best mode instead
 export function upgradeCameraConstraints(constraints: MediaStreamConstraints | undefined) {
-    if (!constraints?.video || !isMaxQuality()) return constraints;
+    if (!constraints?.video || !maxQuality()) return constraints;
 
     const video = typeof constraints.video === "object" ? constraints.video : {};
     return {
         ...constraints,
-        video: {
-            ...video,
-            width: { ideal: CAMERA_TARGET.width },
-            height: { ideal: CAMERA_TARGET.height },
-            frameRate: { ideal: CAMERA_TARGET.frameRate }
-        }
+        video: { ...video, width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 60 } }
     };
 }

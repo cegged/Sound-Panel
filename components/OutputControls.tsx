@@ -8,14 +8,14 @@
 import { plugins } from "@api/PluginManager";
 import { openPluginModal } from "@components/settings";
 import type { Channel } from "@vencord/discord-types";
-import { MediaEngineStore } from "@webpack/common";
+import { MediaEngineStore, useStateFromStores } from "@webpack/common";
 
-import { isWebRTCEngineActive, MAX_VOICE_VOLUME, mixerStore } from "../audio/mixer";
-import { stopAll, useIsPlaying } from "../audio/player";
+import { isSelfMuted, MAX_VOICE_VOLUME, mixerStore } from "../audio/mixer";
 import { settings } from "../settings";
-import { useFluxStores, useStore } from "../utils/store";
+import { useStore } from "../utils/store";
+import { usesWebRTCEngine } from "../webrtc/engine";
 import { cl, RangeSlider } from "./common";
-import { HeadphonesIcon, MicIcon, StopIcon } from "./icons";
+import { HeadphonesIcon, MicIcon } from "./icons";
 
 type StatusLevel = "live" | "warning" | "local";
 
@@ -28,39 +28,33 @@ interface Status {
 const openSettings = () => openPluginModal(plugins.SoundPanel);
 
 function useTransmitStatus(channel: Channel | undefined): Status {
-    useFluxStores([MediaEngineStore]);
-    const { activeMixes } = useStore(mixerStore);
+    const mixing = useStore(mixerStore, s => s.activeMixes > 0);
+    const muted = useStateFromStores([MediaEngineStore], isSelfMuted);
+    const krisp = useStateFromStores([MediaEngineStore], () => MediaEngineStore.getNoiseCancellation());
     const { transmit, webrtcEngine } = settings.use(["transmit", "webrtcEngine"]);
 
     if (!transmit) return { level: "local", text: "Sending to voice is off. Only you hear your sounds and music" };
     if (!channel) return { level: "local", text: "Not in a voice channel. Only you hear your sounds and music" };
 
-    if (activeMixes === 0) {
-        if (!isWebRTCEngineActive()) {
-            return webrtcEngine
-                ? { level: "warning", text: "Restart Discord to switch to the WebRTC voice engine, then others can hear your sounds and music" }
-                : {
-                    level: "warning",
-                    text: "Discord's native voice engine can't carry your own audio. Turn on the WebRTC voice engine to fix this",
-                    action: { label: "Open Settings", run: openSettings }
-                };
-        }
-        return { level: "warning", text: "Rejoin the voice channel so others can hear your sounds and music" };
+    if (!mixing) {
+        if (usesWebRTCEngine()) return { level: "warning", text: "Rejoin the voice channel so others can hear your sounds and music" };
+        if (webrtcEngine) return { level: "warning", text: "Restart Discord to switch to the WebRTC voice engine, then others can hear your sounds and music" };
+
+        return {
+            level: "warning",
+            text: "Discord's native voice engine can't carry your own audio. Turn on the WebRTC voice engine to fix this",
+            action: { label: "Open Settings", run: openSettings }
+        };
     }
 
-    if (MediaEngineStore.isSelfMute() || MediaEngineStore.isSelfDeaf()) {
-        return { level: "warning", text: "You're muted, so others can't hear your sounds and music" };
-    }
-    if (MediaEngineStore.getNoiseCancellation()) {
-        return { level: "warning", text: "Live, but Krisp noise suppression may filter out music. Turn it off for the best quality" };
-    }
+    if (muted) return { level: "warning", text: "You're muted, so others can't hear your sounds and music" };
+    if (krisp) return { level: "warning", text: "Live, but Krisp noise suppression may filter out music. Turn it off for the best quality" };
 
     return { level: "live", text: "Live. Everyone in the call hears your sounds and music" };
 }
 
 export function OutputControls({ channel }: { channel?: Channel; }) {
     const status = useTransmitStatus(channel);
-    const isPlaying = useIsPlaying();
     const { transmit, voiceVolume, localVolume } = settings.use(["transmit", "voiceVolume", "localVolume"]);
 
     return (
@@ -96,17 +90,6 @@ export function OutputControls({ channel }: { channel?: Channel; }) {
                     <RangeSlider label="Volume you hear" value={localVolume} onChange={v => settings.store.localVolume = v} />
                     <span className={cl("volume-value")}>{localVolume}%</span>
                 </label>
-
-                <button
-                    type="button"
-                    className={cl("icon-button", "stop-all")}
-                    aria-label="Stop all"
-                    title="Stop all"
-                    disabled={!isPlaying}
-                    onClick={stopAll}
-                >
-                    <StopIcon size={18} />
-                </button>
             </div>
         </footer>
     );

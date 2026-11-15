@@ -10,27 +10,23 @@ import { createStore as createIdbStore, del, get, set, type UseStore } from "@ap
 import { Native } from "../utils/native";
 import { applyIndexChange, type IndexChange, type LibraryItem } from "./libraryIndex";
 
-export interface LibraryStorage {
+interface LibraryStorage {
     readIndex(): Promise<LibraryItem[]>;
-    // Applies a change to the stored index and returns the updated index
     changeIndex(change: IndexChange): Promise<LibraryItem[]>;
     writeFile(id: string, file: Blob): Promise<void>;
     readFile(id: string, mimeType: string): Promise<Blob | null>;
     deleteFile(id: string): Promise<void>;
 }
 
-// ---------- IndexedDB ----------
-// Used on the web. On desktop it's per Discord app (Stable, PTB and Canary each have their own),
-// so it's only read once there, to move older libraries to the shared one on disk
-
 const INDEX_KEY = "index";
 const MIGRATED_KEY = "migratedToDisk";
 const fileKey = (id: string) => `file:${id}`;
 
 let idbStore: UseStore | undefined;
-// Opened lazily so a disabled plugin never touches IndexedDB
 const db = () => idbStore ??= createIdbStore("SoundPanelData", "SoundPanelStore");
 
+// The browser keeps the library in IndexedDB. Each Discord desktop app has its own IndexedDB though,
+// so there it's only used to migrate libraries from before they were shared on disk
 const idbStorage: LibraryStorage = {
     async readIndex() {
         return await get<LibraryItem[]>(INDEX_KEY, db()) ?? [];
@@ -47,9 +43,6 @@ const idbStorage: LibraryStorage = {
     deleteFile: id => del(fileKey(id), db())
 };
 
-// ---------- Disk (desktop) ----------
-// One library in Vencord's data folder, shared by every Discord app
-
 function createDiskStorage(native: NonNullable<typeof Native>): LibraryStorage {
     return {
         readIndex: () => native.readLibraryIndex(),
@@ -59,7 +52,7 @@ function createDiskStorage(native: NonNullable<typeof Native>): LibraryStorage {
         },
         async readFile(id, mimeType) {
             const data = await native.readLibraryFile(id);
-            return data ? new Blob([data], { type: mimeType }) : null;
+            return data && new Blob([data], { type: mimeType });
         },
         deleteFile: id => native.deleteLibraryFile(id)
     };
@@ -67,7 +60,6 @@ function createDiskStorage(native: NonNullable<typeof Native>): LibraryStorage {
 
 export const storage = Native ? createDiskStorage(Native) : idbStorage;
 
-// Copies sounds this Discord app stored in IndexedDB (before the shared library existed) to the disk library
 export async function migrateLegacyLibrary(current: LibraryItem[]) {
     if (storage === idbStorage || await get<boolean>(MIGRATED_KEY, db())) return current;
 

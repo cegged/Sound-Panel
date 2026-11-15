@@ -5,37 +5,144 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import type { ReactNode } from "react";
+
+// Icons only build their shapes when they render. JSX at module level would run before Discord's React exists
+// and stop Vencord from loading.
+
 export interface IconProps {
     className?: string;
     size?: number;
 }
 
-function makeIcon(path: string) {
-    return ({ className, size = 20 }: IconProps) => (
+// Line work uses 2px round strokes, the same weight as Discord's own icons
+const line = { fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round" } as const;
+
+const REPEAT_ARROWS = "M17 2.5l3 3-3 3M4 11.5v-1a5 5 0 0 1 5-5h11M7 21.5l-3-3 3-3M20 12.5v1a5 5 0 0 1-5 5H4";
+const TRAY = "M4 15v2.5A2.5 2.5 0 0 0 6.5 20h11a2.5 2.5 0 0 0 2.5-2.5V15";
+
+function Svg({ className, size = 20, children }: IconProps & { children: ReactNode; }) {
+    return (
         <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <path d={path} />
+            {children}
         </svg>
     );
 }
 
-export const SoundPanelIcon = makeIcon("M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 5h-3v5.5c0 1.38-1.12 2.5-2.5 2.5S10 13.88 10 12.5s1.12-2.5 2.5-2.5c.57 0 1.08.19 1.5.51V5h4v2zM4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6z");
-export const PlayIcon = makeIcon("M8 5v14l11-7z");
-export const PauseIcon = makeIcon("M6 19h4V5H6v14zm8-14v14h4V5h-4z");
-export const StopIcon = makeIcon("M6 6h12v12H6z");
-export const NextIcon = makeIcon("M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z");
-export const PreviousIcon = makeIcon("M6 6h2v12H6zm3.5 6l8.5 6V6z");
-export const ShuffleIcon = makeIcon("M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z");
-export const RepeatIcon = makeIcon("M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z");
-export const RepeatOneIcon = makeIcon("M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4zm-4-2V9h-1l-2 1v1h1.5v4H13z");
-export const UploadIcon = makeIcon("M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z");
-export const SaveIcon = makeIcon("M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z");
-export const MusicNoteIcon = makeIcon("M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z");
-export const SpeakerIcon = makeIcon("M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z");
-export const HeadphonesIcon = makeIcon("M12 1c-4.97 0-9 4.03-9 9v7c0 1.66 1.34 3 3 3h3v-8H5v-2c0-3.87 3.13-7 7-7s7 3.13 7 7v2h-4v8h3c1.66 0 3-1.34 3-3v-7c0-4.97-4.03-9-9-9z");
-export const MicIcon = makeIcon("M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z");
-export const SearchIcon = makeIcon("M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z");
-export const EditIcon = makeIcon("M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z");
-export const DeleteIcon = makeIcon("M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z");
-export const ChevronIcon = makeIcon("M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z");
-export const StarIcon = makeIcon("M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z");
-export const ServerIcon = makeIcon("M4 4h16v6H4zm0 10h16v6H4zm3-8.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm0 10a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z");
+export const SoundPanelIcon = (props: IconProps) => (
+    <Svg {...props}>
+        <path {...line} d="M6 4v16M12 4v16M18 4v16" />
+        <rect x="3" y="12" width="6" height="5" rx="2" />
+        <rect x="9" y="6" width="6" height="5" rx="2" />
+        <rect x="15" y="10" width="6" height="5" rx="2" />
+    </Svg>
+);
+
+export const SoundboardIcon = (props: IconProps) => (
+    <Svg {...props}>
+        <rect x="3" y="3" width="8" height="8" rx="2.5" />
+        <rect x="13" y="3" width="8" height="8" rx="2.5" />
+        <rect x="3" y="13" width="8" height="8" rx="2.5" />
+        <circle cx="17" cy="17" r="4" />
+    </Svg>
+);
+
+export const WaveformIcon = (props: IconProps) => (
+    <Svg {...props}>
+        <path {...line} d="M4 10v4M8 6.5v11M12 3.5v17M16 8v8M20 10.5v3" />
+    </Svg>
+);
+
+export const MusicNoteIcon = (props: IconProps) => (
+    <Svg {...props}>
+        <circle cx="6.5" cy="17.5" r="3" />
+        <circle cx="16.5" cy="15.5" r="3" />
+        <path d="M7.5 17.5V7.2q0-1.2 1.2-1.45l9.6-2q1.2-.25 1.2.95v10.8h-2V6.72l-8 1.66v9.12Z" />
+    </Svg>
+);
+
+export const PlayIcon = (props: IconProps) => (
+    <Svg {...props}>
+        <path d="M7.54 4.43 18.46 11.07q1.54.93 0 1.86L7.54 19.57Q6 20.5 6 18.7V5.3q0-1.8 1.54-.87Z" />
+    </Svg>
+);
+
+export const PauseIcon = (props: IconProps) => (
+    <Svg {...props}>
+        <rect x="5.5" y="4" width="4.5" height="16" rx="1.5" />
+        <rect x="14" y="4" width="4.5" height="16" rx="1.5" />
+    </Svg>
+);
+
+export const StopIcon = (props: IconProps) => (
+    <Svg {...props}>
+        <rect x="5" y="5" width="14" height="14" rx="3" />
+    </Svg>
+);
+
+export const NextIcon = (props: IconProps) => (
+    <Svg {...props}>
+        <path d="M5.32 5.4 13.68 11.1q1.32.9 0 1.8L5.32 18.6Q4 19.5 4 17.9V6.1q0-1.6 1.32-.7Z" />
+        <rect x="17" y="4.5" width="3" height="15" rx="1.5" />
+    </Svg>
+);
+
+export const PreviousIcon = (props: IconProps) => (
+    <Svg {...props}>
+        <path d="M18.68 5.4 10.32 11.1q-1.32.9 0 1.8l8.36 5.7q1.32.9 1.32-.7V6.1q0-1.6-1.32-.7Z" />
+        <rect x="4" y="4.5" width="3" height="15" rx="1.5" />
+    </Svg>
+);
+
+export const ShuffleIcon = (props: IconProps) => (
+    <Svg {...props}>
+        <path {...line} d="M3 17h2.6a4.4 4.4 0 0 0 3.5-1.8l4.8-6.4A4.4 4.4 0 0 1 17.4 7H21M18 4l3 3-3 3M3 7h2.6c1.1 0 2.2.4 3 1.2M21 17h-3.6c-1.1 0-2.2-.4-3-1.2M18 14l3 3-3 3" />
+    </Svg>
+);
+
+export const RepeatIcon = (props: IconProps) => (
+    <Svg {...props}>
+        <path {...line} d={REPEAT_ARROWS} />
+    </Svg>
+);
+
+export const RepeatOneIcon = (props: IconProps) => (
+    <Svg {...props}>
+        <path {...line} d={REPEAT_ARROWS} />
+        <path {...line} d="M11 10.6 12.5 9.5v5.5" />
+    </Svg>
+);
+
+export const SpeakerIcon = (props: IconProps) => (
+    <Svg {...props}>
+        <path d="M11 4.7a1 1 0 0 0-1.65-.76L5.6 7.2H4a2 2 0 0 0-2 2v5.6a2 2 0 0 0 2 2h1.6l3.75 3.26A1 1 0 0 0 11 19.3Z" />
+        <path {...line} d="M15 9.2a4 4 0 0 1 0 5.6M17.8 6.4a8 8 0 0 1 0 11.2" />
+    </Svg>
+);
+
+export const HeadphonesIcon = (props: IconProps) => (
+    <Svg {...props}>
+        <path {...line} d="M4 15v-3a8 8 0 0 1 16 0v3" />
+        <rect x="2.5" y="13" width="6" height="8.5" rx="2.5" />
+        <rect x="15.5" y="13" width="6" height="8.5" rx="2.5" />
+    </Svg>
+);
+
+export const MicIcon = (props: IconProps) => (
+    <Svg {...props}>
+        <rect x="8.5" y="2.5" width="7" height="12" rx="3.5" />
+        <path {...line} d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M9 21h6" />
+    </Svg>
+);
+
+export const UploadIcon = (props: IconProps) => (
+    <Svg {...props}>
+        <path {...line} d={`M12 15V4M7.5 8.5 12 4l4.5 4.5${TRAY}`} />
+    </Svg>
+);
+
+export const SaveIcon = (props: IconProps) => (
+    <Svg {...props}>
+        <path {...line} d={`M12 4v11M7.5 10.5 12 15l4.5-4.5${TRAY}`} />
+    </Svg>
+);

@@ -5,8 +5,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { Logger } from "@utils/Logger";
-import { showToast, useState } from "@webpack/common";
+import { useState } from "@webpack/common";
+import type { CSSProperties } from "react";
 
 import {
     cycleRepeatMode,
@@ -19,8 +19,9 @@ import {
 } from "../audio/player";
 import { LibraryItem, updateItem, useLibrary } from "../data/library";
 import { settings } from "../settings";
-import { formatTime, useStore } from "../utils/store";
-import { cl, EmptyState, FileDropZone, matchesQuery, RangeSlider, RenameInput, SearchBox, UploadButton } from "./common";
+import { showError } from "../utils/logger";
+import { useStore } from "../utils/store";
+import { cl, EmptyState, FileDropZone, formatTime, matchesQuery, RangeSlider, RenameInput, SearchBox, UploadButton } from "./common";
 import {
     MusicNoteIcon,
     NextIcon,
@@ -29,30 +30,47 @@ import {
     PreviousIcon,
     RepeatIcon,
     RepeatOneIcon,
-    ShuffleIcon
+    ShuffleIcon,
+    SpeakerIcon
 } from "./icons";
 import { openLibraryItemMenu } from "./LibraryItemMenu";
 
-const logger = new Logger("SoundPanel");
-
 function run(action: () => Promise<unknown>) {
-    action().catch(err => {
-        logger.error("Music action failed", err);
-        showToast({ text: "Couldn't play this track", variant: "critical" });
-    });
+    action().catch(err => showError("Couldn't play this track", err));
+}
+
+// The position changes several times a second, so only this part re-renders for it
+function SeekBar({ fallbackDuration }: { fallbackDuration: number; }) {
+    const position = useStore(musicStore, s => s.position);
+    const duration = useStore(musicStore, s => s.duration) || fallbackDuration;
+
+    return (
+        <div className={cl("seek")}>
+            <span className={cl("time")}>{formatTime(position)}</span>
+            <RangeSlider label="Seek" value={Math.min(position, duration)} max={duration || 1} step={0.1} onChange={seekMusic} />
+            <span className={cl("time")}>{formatTime(duration)}</span>
+        </div>
+    );
+}
+
+// Gives every track its own accent color
+function hueOf(id: string) {
+    let hash = 0;
+    for (const char of id) hash = (hash * 31 + char.charCodeAt(0)) % 360;
+    return hash;
 }
 
 function NowPlaying({ tracks }: { tracks: LibraryItem[]; }) {
-    const { currentId, playing, position, duration } = useStore(musicStore);
+    const currentId = useStore(musicStore, s => s.currentId);
+    const playing = useStore(musicStore, s => s.playing);
     const { repeatMode, shuffle, musicVolume } = settings.use(["repeatMode", "shuffle", "musicVolume"]);
     const current = tracks.find(track => track.id === currentId);
-    const totalDuration = duration || current?.duration || 0;
 
     return (
-        <div className={cl("now-playing")}>
+        <div className={cl("now-playing")} style={current && { "--vc-soundpanel-hue": hueOf(current.id) } as CSSProperties}>
             <div className={cl("now-playing-info")}>
                 <div className={cl("now-playing-art", { "now-playing-art-active": playing })}>
-                    <MusicNoteIcon size={22} />
+                    <MusicNoteIcon size={24} />
                 </div>
                 <div className={cl("now-playing-text")}>
                     <div className={cl("now-playing-title")}>{current?.name ?? "Nothing playing"}</div>
@@ -62,17 +80,7 @@ function NowPlaying({ tracks }: { tracks: LibraryItem[]; }) {
                 </div>
             </div>
 
-            <div className={cl("seek")}>
-                <span className={cl("time")}>{formatTime(position)}</span>
-                <RangeSlider
-                    label="Seek"
-                    value={Math.min(position, totalDuration)}
-                    max={totalDuration || 1}
-                    step={0.1}
-                    onChange={seekMusic}
-                />
-                <span className={cl("time")}>{formatTime(totalDuration)}</span>
-            </div>
+            <SeekBar fallbackDuration={current?.duration ?? 0} />
 
             <div className={cl("transport")}>
                 <button
@@ -86,7 +94,7 @@ function NowPlaying({ tracks }: { tracks: LibraryItem[]; }) {
                     <ShuffleIcon size={18} />
                 </button>
                 <button type="button" className={cl("icon-button")} aria-label="Previous" title="Previous" onClick={() => run(() => skipTrack(-1))}>
-                    <PreviousIcon size={22} />
+                    <PreviousIcon size={20} />
                 </button>
                 <button
                     type="button"
@@ -95,10 +103,10 @@ function NowPlaying({ tracks }: { tracks: LibraryItem[]; }) {
                     disabled={!tracks.length}
                     onClick={() => run(toggleMusic)}
                 >
-                    {playing ? <PauseIcon size={24} /> : <PlayIcon size={24} />}
+                    {playing ? <PauseIcon size={22} /> : <PlayIcon size={22} />}
                 </button>
                 <button type="button" className={cl("icon-button")} aria-label="Next" title="Next" onClick={() => run(() => skipTrack(1))}>
-                    <NextIcon size={22} />
+                    <NextIcon size={20} />
                 </button>
                 <button
                     type="button"
@@ -111,8 +119,8 @@ function NowPlaying({ tracks }: { tracks: LibraryItem[]; }) {
                 </button>
             </div>
 
-            <label className={cl("inline-volume")}>
-                <span>Music volume</span>
+            <label className={cl("inline-volume")} title="Music volume">
+                <SpeakerIcon size={16} />
                 <RangeSlider label="Music volume" value={musicVolume} onChange={v => settings.store.musicVolume = v} />
                 <span className={cl("volume-value")}>{musicVolume}%</span>
             </label>
@@ -163,7 +171,8 @@ function TrackRow({ track, index, active, playing, editing, setEditing }: {
 
 export function MusicTab() {
     const { loaded, items: tracks } = useLibrary("music");
-    const { currentId, playing } = useStore(musicStore);
+    const currentId = useStore(musicStore, s => s.currentId);
+    const playing = useStore(musicStore, s => s.playing);
     const [query, setQuery] = useState("");
     const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -179,13 +188,13 @@ export function MusicTab() {
                 </div>
                 <div className={cl("scroller")}>
                     {!loaded ? (
-                        <EmptyState icon={<MusicNoteIcon size={32} />} title="Loading your music..." />
+                        <EmptyState icon={<MusicNoteIcon size={28} />} title="Loading your music..." />
                     ) : tracks.length === 0 ? (
-                        <EmptyState icon={<MusicNoteIcon size={32} />} title="Your playlist is empty">
+                        <EmptyState icon={<MusicNoteIcon size={28} />} title="Your playlist is empty">
                             Click <b>Add Music</b> or drop audio files here. Right-click a track for more options.
                         </EmptyState>
                     ) : visible.length === 0 ? (
-                        <EmptyState icon={<MusicNoteIcon size={32} />} title="No tracks match your search" />
+                        <EmptyState icon={<MusicNoteIcon size={28} />} title="No tracks match your search" />
                     ) : (
                         <div className={cl("track-list")}>
                             {visible.map(track => (

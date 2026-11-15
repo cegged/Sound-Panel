@@ -5,55 +5,37 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { Logger } from "@utils/Logger";
+import { DownArrow, StarFilled } from "@components/Icons";
 import type { Channel, SoundboardSound } from "@vencord/discord-types";
-import {
-    ContextMenuApi,
-    GuildStore,
-    MediaEngineStore,
-    Menu,
-    PermissionStore,
-    showToast,
-    SoundboardStore,
-    Tooltip,
-    useEffect,
-    useState
-} from "@webpack/common";
+import { ContextMenuApi, GuildStore, Menu, showToast, SoundboardStore, Tooltip, useEffect, useState } from "@webpack/common";
 
-import { mixerStore } from "../audio/mixer";
 import { clipStore, playClip, stopClip } from "../audio/player";
 import { addBlob } from "../data/library";
 import {
-    canUseMicrophone,
     downloadSoundboardSound,
     getEmojiUrl,
     getSoundGroups,
     getSoundRoute,
     getSoundUrl,
+    getUnicodeEmojiUrl,
     loadSoundboardSounds,
     playServerSound,
+    type SoundContext,
     type SoundGroup,
-    type SoundRoute
+    type SoundRoute,
+    useSoundContext
 } from "../discord/soundboard";
 import { settings } from "../settings";
-import { useFluxStores, useStore } from "../utils/store";
+import { showError } from "../utils/logger";
+import { useFluxUpdates, useStore } from "../utils/store";
 import { cl, EmptyState, matchesQuery, SearchBox } from "./common";
-import { ChevronIcon, HeadphonesIcon, MicIcon, MusicNoteIcon, PlayIcon, SaveIcon, ServerIcon, SpeakerIcon, StarIcon } from "./icons";
-
-const logger = new Logger("SoundPanel");
+import { HeadphonesIcon, MicIcon, MusicNoteIcon, PlayIcon, SaveIcon, SoundboardIcon, SpeakerIcon } from "./icons";
 
 const clipKey = (sound: SoundboardSound) => `server:${sound.soundId}`;
 
-function reportError(message: string) {
-    return (err: Error) => {
-        logger.error(message, err);
-        showToast({ text: `${message}: ${err.message}`, variant: "critical" });
-    };
-}
-
 function previewSound(sound: SoundboardSound) {
     playClip({ key: clipKey(sound), url: getSoundUrl(sound.soundId), volume: sound.volume, localOnly: true })
-        .catch(reportError("Couldn't preview this sound"));
+        .catch(err => showError("Couldn't preview this sound", err));
 }
 
 async function playThroughMicrophone(sound: SoundboardSound) {
@@ -61,7 +43,7 @@ async function playThroughMicrophone(sound: SoundboardSound) {
     try {
         await playClip({ key: clipKey(sound), url, volume: sound.volume });
     } finally {
-        // The element keeps its own reference while it plays
+        // The audio element holds on to the data while it plays
         URL.revokeObjectURL(url);
     }
 }
@@ -69,10 +51,11 @@ async function playThroughMicrophone(sound: SoundboardSound) {
 function playSound(sound: SoundboardSound, channel: Channel | undefined, route: SoundRoute) {
     switch (route.kind) {
         case "soundboard":
-            playServerSound(sound, channel!).catch(reportError(`Couldn't play "${sound.name}"`));
+            // Discord's error says why, e.g. a missing permission
+            playServerSound(sound, channel!).catch(err => showError(`Couldn't play "${sound.name}": ${err.message}`, err));
             break;
         case "microphone":
-            playThroughMicrophone(sound).catch(reportError(`Couldn't play "${sound.name}"`));
+            playThroughMicrophone(sound).catch(err => showError(`Couldn't play "${sound.name}"`, err));
             break;
         case "local":
             if (channel) showToast({ text: `Only you will hear this: ${route.reason}` });
@@ -85,7 +68,7 @@ function saveSound(sound: SoundboardSound, kind: "sound" | "music") {
     downloadSoundboardSound(sound.soundId)
         .then(blob => addBlob(blob, sound.name, kind))
         .then(() => showToast({ text: `Saved "${sound.name}" to ${kind === "music" ? "Music" : "My Sounds"}`, variant: "success" }))
-        .catch(reportError("Couldn't save this sound"));
+        .catch(err => showError("Couldn't save this sound", err));
 }
 
 function describeRoute(sound: SoundboardSound, route: SoundRoute) {
@@ -97,12 +80,12 @@ function describeRoute(sound: SoundboardSound, route: SoundRoute) {
 }
 
 function SoundEmoji({ sound }: { sound: SoundboardSound; }) {
-    if (sound.emojiId) return <img className={cl("emoji")} src={getEmojiUrl(sound.emojiId)} alt="" loading="lazy" />;
-    if (sound.emojiName) return <span className={cl("emoji")}>{sound.emojiName}</span>;
-    return <span className={cl("emoji")}><SpeakerIcon size={16} /></span>;
+    const src = sound.emojiId ? getEmojiUrl(sound.emojiId) : sound.emojiName && getUnicodeEmojiUrl(sound.emojiName);
+    if (src) return <img className={cl("emoji")} src={src} alt="" loading="lazy" />;
+    return sound.emojiName ? <span className={cl("emoji")}>{sound.emojiName}</span> : <SpeakerIcon size={16} />;
 }
 
-function ServerSoundMenu({ sound, channel, route }: { sound: SoundboardSound; channel?: Channel; route: SoundRoute; }) {
+function ServerSoundMenu({ sound, ctx, route }: { sound: SoundboardSound; ctx: SoundContext; route: SoundRoute; }) {
     return (
         <Menu.Menu navId="vc-soundpanel-server-sound" onClose={ContextMenuApi.closeContextMenu} aria-label={sound.name}>
             <Menu.MenuItem
@@ -110,14 +93,14 @@ function ServerSoundMenu({ sound, channel, route }: { sound: SoundboardSound; ch
                 label="Play With Discord Soundboard"
                 icon={PlayIcon}
                 disabled={route.kind !== "soundboard"}
-                action={() => playSound(sound, channel, { kind: "soundboard" })}
+                action={() => playSound(sound, ctx.channel, { kind: "soundboard" })}
             />
             <Menu.MenuItem
                 id="vc-soundpanel-play-mic"
                 label="Play Through Microphone"
                 icon={MicIcon}
-                disabled={!channel || !canUseMicrophone()}
-                action={() => playSound(sound, channel, { kind: "microphone" })}
+                disabled={!ctx.channel || !ctx.micReady}
+                action={() => playSound(sound, ctx.channel, { kind: "microphone" })}
             />
             <Menu.MenuItem
                 id="vc-soundpanel-preview"
@@ -142,14 +125,12 @@ function ServerSoundMenu({ sound, channel, route }: { sound: SoundboardSound; ch
     );
 }
 
-function ServerSoundTile({ sound, channel, playing }: { sound: SoundboardSound; channel?: Channel; playing: boolean; }) {
-    const route = getSoundRoute(sound, channel);
-    const playingInVoice = SoundboardStore.isPlayingSound(sound.soundId);
+function ServerSoundTile({ sound, ctx, playing }: { sound: SoundboardSound; ctx: SoundContext; playing: boolean; }) {
+    const route = getSoundRoute(sound, ctx);
 
     const onClick = () => {
-        // With overlap off, clicking a sound that's already playing stops it
         if (playing && !settings.store.allowOverlap) stopClip(clipKey(sound));
-        else playSound(sound, channel, route);
+        else playSound(sound, ctx.channel, route);
     };
 
     return (
@@ -160,14 +141,12 @@ function ServerSoundTile({ sound, channel, playing }: { sound: SoundboardSound; 
                     type="button"
                     className={cl("tile", {
                         "tile-local": route.kind === "local",
-                        "tile-playing": playing || playingInVoice
+                        "tile-playing": playing || SoundboardStore.isPlayingSound(sound.soundId)
                     })}
                     onClick={onClick}
-                    onContextMenu={e => ContextMenuApi.openContextMenu(e, () => (
-                        <ServerSoundMenu sound={sound} channel={channel} route={route} />
-                    ))}
+                    onContextMenu={e => ContextMenuApi.openContextMenu(e, () => <ServerSoundMenu sound={sound} ctx={ctx} route={route} />)}
                 >
-                    <SoundEmoji sound={sound} />
+                    <span className={cl("tile-icon")}><SoundEmoji sound={sound} /></span>
                     <span className={cl("tile-name")}>{sound.name}</span>
                     {route.kind === "microphone" && <span className={cl("tile-badge")}><MicIcon size={12} /></span>}
                 </button>
@@ -176,18 +155,23 @@ function ServerSoundTile({ sound, channel, playing }: { sound: SoundboardSound; 
     );
 }
 
+const acronym = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 3).map(word => [...word][0]).join("");
+
 function GroupIcon({ group }: { group: SoundGroup; }) {
-    if (group.id === "favorites") return <StarIcon size={16} />;
     if (group.iconUrl) return <img className={cl("group-icon")} src={group.iconUrl} alt="" />;
-    return <ServerIcon size={16} />;
+    if (group.id === "favorites") return <span className={cl("group-icon", "group-icon-favorites")}><StarFilled width={12} height={12} /></span>;
+
+    return (
+        <span className={cl("group-icon", "group-icon-fallback")}>
+            {group.id === "defaults" ? <SoundboardIcon size={12} /> : acronym(group.name)}
+        </span>
+    );
 }
 
 export function ServerSoundsTab({ channel }: { channel?: Channel; }) {
-    useFluxStores([SoundboardStore, GuildStore, MediaEngineStore, PermissionStore]);
-    // Each sound's route depends on these, so re-render when they change
-    useStore(mixerStore);
-    settings.use(["transmit", "serverSoundsThroughMic"]);
-    const { playing } = useStore(clipStore);
+    useFluxUpdates([SoundboardStore, GuildStore]);
+    const ctx = useSoundContext(channel);
+    const playing = useStore(clipStore, s => s.playing);
     const [query, setQuery] = useState("");
     const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
 
@@ -205,6 +189,8 @@ export function ServerSoundsTab({ channel }: { channel?: Channel; }) {
         return next;
     });
 
+    const loading = SoundboardStore.isFetchingSounds() || !SoundboardStore.hasFetchedAllSounds();
+
     return (
         <div className={cl("tab")}>
             <div className={cl("toolbar")}>
@@ -215,9 +201,10 @@ export function ServerSoundsTab({ channel }: { channel?: Channel; }) {
             )}
             <div className={cl("scroller")}>
                 {groups.length === 0 ? (
-                    SoundboardStore.isFetchingSounds() || !SoundboardStore.hasFetchedAllSounds()
-                        ? <EmptyState icon={<SpeakerIcon size={32} />} title="Loading sounds..." />
-                        : <EmptyState icon={<SpeakerIcon size={32} />} title={query ? "No sounds match your search" : "No soundboard sounds available"} />
+                    <EmptyState
+                        icon={<SoundboardIcon size={28} />}
+                        title={loading ? "Loading sounds..." : query ? "No sounds match your search" : "No soundboard sounds available"}
+                    />
                 ) : groups.map(group => {
                     const isCollapsed = collapsed.has(group.id) && !query;
 
@@ -227,7 +214,7 @@ export function ServerSoundsTab({ channel }: { channel?: Channel; }) {
                                 <GroupIcon group={group} />
                                 <span className={cl("group-name")}>{group.name}</span>
                                 <span className={cl("group-count")}>{group.sounds.length}</span>
-                                <span className={cl("chevron", { "chevron-collapsed": isCollapsed })}><ChevronIcon size={16} /></span>
+                                <span className={cl("chevron", { "chevron-collapsed": isCollapsed })}><DownArrow width={16} height={16} /></span>
                             </button>
                             {!isCollapsed && (
                                 <div className={cl("grid")}>
@@ -235,7 +222,7 @@ export function ServerSoundsTab({ channel }: { channel?: Channel; }) {
                                         <ServerSoundTile
                                             key={`${group.id}-${sound.soundId}`}
                                             sound={sound}
-                                            channel={channel}
+                                            ctx={ctx}
                                             playing={playing.includes(clipKey(sound))}
                                         />
                                     ))}

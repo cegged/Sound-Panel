@@ -17,59 +17,59 @@ export type RepeatMode = "off" | "all" | "one";
 export const settings = definePluginSettings({
     transmit: {
         type: OptionType.BOOLEAN,
-        description: "Send your own sounds and music to the voice channel. When off, only you hear them",
+        description: "Send your sounds and music to the voice channel. When off, only you hear them",
         default: true,
-        onChange: () => applyVolumes()
+        onChange: applyVolumes
     },
     voiceVolume: {
         type: OptionType.SLIDER,
-        description: "Volume other people hear your own sounds and music at",
+        description: "Volume others hear your sounds and music at",
         markers: [0, 25, 50, 75, 100, 125, 150],
         default: 100,
         stickToMarkers: false,
-        onChange: () => applyVolumes()
+        onChange: applyVolumes
     },
     localVolume: {
         type: OptionType.SLIDER,
-        description: "Volume you hear your own sounds, music and previews at",
+        description: "Volume you hear your sounds, music and previews at",
         markers: [0, 25, 50, 75, 100],
         default: 50,
         stickToMarkers: false,
-        onChange: () => applyVolumes()
+        onChange: applyVolumes
     },
     musicVolume: {
         type: OptionType.SLIDER,
-        description: "Music volume (applies to both you and the voice channel)",
+        description: "Music volume, for you and the voice channel",
         markers: [0, 25, 50, 75, 100],
         default: 60,
         stickToMarkers: false,
-        onChange: () => applyMusicVolume()
+        onChange: applyMusicVolume
     },
     serverSoundsThroughMic: {
         type: OptionType.BOOLEAN,
-        description: "Always play server soundboard sounds through your microphone instead of Discord's soundboard. Sounds you aren't allowed to use on the soundboard always go through your microphone",
+        description: "Play server sounds through your microphone even where Discord's soundboard is allowed",
         default: false
     },
     allowOverlap: {
         type: OptionType.BOOLEAN,
-        description: "Let your own sounds overlap. When off, playing a sound stops the previous one",
+        description: "Let your sounds overlap instead of stopping the previous one",
         default: true
     },
     holdPushToTalk: {
         type: OptionType.BOOLEAN,
-        description: "Keep transmitting while your own audio plays, even when using Push to Talk",
+        description: "Keep transmitting while your audio plays when using Push to Talk",
         default: true
     },
     webrtcEngine: {
         type: OptionType.BOOLEAN,
-        description: "Use Discord's WebRTC voice engine on the desktop app. The native engine can't mix your own audio into the microphone, so this is required for others to hear it. Screen sharing then uses SoundPanel's own screen picker",
+        description: "Use Discord's WebRTC voice engine. The desktop app's native engine can't carry your own audio, so others only hear it with this on",
         default: false,
         restartNeeded: true,
         hidden: !IS_DISCORD_DESKTOP
     },
     maxVideoQuality: {
         type: OptionType.BOOLEAN,
-        description: "With the WebRTC voice engine, send your camera at its best resolution and frame rate and your stream at exactly the quality you pick, at the highest bitrate Discord allows. Discord otherwise shrinks video to viewers' window sizes and lowers your camera's frame rate when you're quiet. Uses more upload bandwidth and CPU",
+        description: "With the WebRTC engine, send your camera and streams at full quality instead of shrinking them to viewers' window sizes. Uses more bandwidth and CPU",
         default: true,
         hidden: !IS_DISCORD_DESKTOP
     },

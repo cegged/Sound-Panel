@@ -5,32 +5,27 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import { DeleteIcon, PencilIcon } from "@components/Icons";
 import { debounce } from "@shared/debounce";
-import { Logger } from "@utils/Logger";
-import { ContextMenuApi, Menu, showToast } from "@webpack/common";
+import { ContextMenuApi, Menu } from "@webpack/common";
 
 import { applyMusicVolume, playLibrarySound, playTrack, releaseTrack, stopClip } from "../audio/player";
 import { LibraryItem, removeItem, updateItem } from "../data/library";
-import { DeleteIcon, EditIcon, HeadphonesIcon, MusicNoteIcon, PlayIcon, SpeakerIcon } from "./icons";
-
-const logger = new Logger("SoundPanel");
-
-function reportError(action: string) {
-    return (err: unknown) => {
-        logger.error(`Failed to ${action}`, err);
-        showToast({ text: `Couldn't ${action}`, variant: "critical" });
-    };
-}
+import { showError } from "../utils/logger";
+import { HeadphonesIcon, MusicNoteIcon, PlayIcon, WaveformIcon } from "./icons";
 
 const setVolume = debounce((item: LibraryItem, volume: number) => {
     updateItem(item.id, { volume: volume / 100 })
         .then(() => item.kind === "music" && applyMusicVolume())
-        .catch(reportError("change the volume"));
+        .catch(err => showError("Couldn't change the volume", err));
 }, 150);
 
 function LibraryItemMenu({ item, onRename }: { item: LibraryItem; onRename(): void; }) {
     const isSound = item.kind === "sound";
     const moveTarget = isSound ? "music" : "sound";
+
+    const play = (localOnly?: boolean) => (isSound ? playLibrarySound(item, localOnly) : playTrack(item.id))
+        .catch(err => showError(`Couldn't play "${item.name}"`, err));
 
     const release = () => {
         stopClip(item.id);
@@ -43,14 +38,14 @@ function LibraryItemMenu({ item, onRename }: { item: LibraryItem; onRename(): vo
                 id="vc-soundpanel-play"
                 label={isSound ? "Play" : "Play Track"}
                 icon={PlayIcon}
-                action={() => (isSound ? playLibrarySound(item) : playTrack(item.id)).catch(reportError("play the file"))}
+                action={() => play()}
             />
             {isSound && (
                 <Menu.MenuItem
                     id="vc-soundpanel-preview"
                     label="Play Only For Me"
                     icon={HeadphonesIcon}
-                    action={() => playLibrarySound(item, true).catch(reportError("play the file"))}
+                    action={() => play(true)}
                 />
             )}
             <Menu.MenuSeparator />
@@ -72,16 +67,16 @@ function LibraryItemMenu({ item, onRename }: { item: LibraryItem; onRename(): vo
             <Menu.MenuItem
                 id="vc-soundpanel-rename"
                 label="Rename"
-                icon={EditIcon}
+                icon={PencilIcon}
                 action={onRename}
             />
             <Menu.MenuItem
                 id="vc-soundpanel-move"
                 label={isSound ? "Move to Music" : "Move to My Sounds"}
-                icon={isSound ? MusicNoteIcon : SpeakerIcon}
+                icon={isSound ? MusicNoteIcon : WaveformIcon}
                 action={() => {
                     release();
-                    updateItem(item.id, { kind: moveTarget }).catch(reportError("move the file"));
+                    updateItem(item.id, { kind: moveTarget }).catch(err => showError(`Couldn't move "${item.name}"`, err));
                 }}
             />
             <Menu.MenuSeparator />
@@ -92,7 +87,7 @@ function LibraryItemMenu({ item, onRename }: { item: LibraryItem; onRename(): vo
                 icon={DeleteIcon}
                 action={() => {
                     release();
-                    removeItem(item.id).catch(reportError("delete the file"));
+                    removeItem(item.id).catch(err => showError(`Couldn't delete "${item.name}"`, err));
                 }}
             />
         </Menu.Menu>

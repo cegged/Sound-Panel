@@ -5,18 +5,19 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { Logger } from "@utils/Logger";
-import { showToast, useState } from "@webpack/common";
+import { useState } from "@webpack/common";
 
 import { clipStore, playLibrarySound, stopClip } from "../audio/player";
 import { LibraryItem, updateItem, useLibrary } from "../data/library";
 import { settings } from "../settings";
-import { formatTime, useStore } from "../utils/store";
-import { cl, EmptyState, FileDropZone, matchesQuery, RenameInput, SearchBox, UploadButton } from "./common";
-import { SpeakerIcon, StopIcon } from "./icons";
+import { showError } from "../utils/logger";
+import { useStore } from "../utils/store";
+import { cl, EmptyState, FileDropZone, formatTime, matchesQuery, RenameInput, SearchBox, UploadButton } from "./common";
+import { StopIcon, WaveformIcon } from "./icons";
 import { openLibraryItemMenu } from "./LibraryItemMenu";
 
-const logger = new Logger("SoundPanel");
+// Sound effects are short, so "0.8s" says more than "0:00"
+const clipLength = (seconds: number) => seconds < 60 ? `${seconds.toFixed(1)}s` : formatTime(seconds);
 
 function SoundTile({ item, playing, editing, setEditing }: {
     item: LibraryItem;
@@ -33,10 +34,7 @@ function SoundTile({ item, playing, editing, setEditing }: {
             return;
         }
 
-        playLibrarySound(item).catch(err => {
-            logger.error("Failed to play sound", err);
-            showToast({ text: `Couldn't play "${item.name}"`, variant: "critical" });
-        });
+        playLibrarySound(item).catch(err => showError(`Couldn't play "${item.name}"`, err));
     };
 
     return (
@@ -49,7 +47,7 @@ function SoundTile({ item, playing, editing, setEditing }: {
             onKeyDown={e => (e.key === "Enter" || e.key === " ") && onClick()}
             onContextMenu={e => openLibraryItemMenu(e, item, () => setEditing(true))}
         >
-            <span className={cl("emoji")}><SpeakerIcon size={16} /></span>
+            <span className={cl("tile-icon")}><WaveformIcon size={16} /></span>
             {editing ? (
                 <RenameInput
                     initialValue={item.name}
@@ -59,16 +57,18 @@ function SoundTile({ item, playing, editing, setEditing }: {
                     }}
                 />
             ) : (
-                <span className={cl("tile-name")}>{item.name}</span>
+                <span className={cl("tile-text")}>
+                    <span className={cl("tile-name")}>{item.name}</span>
+                    {item.duration > 0 && <span className={cl("tile-meta")}>{clipLength(item.duration)}</span>}
+                </span>
             )}
-            {item.duration > 0 && !editing && <span className={cl("tile-meta")}>{formatTime(item.duration)}</span>}
         </div>
     );
 }
 
 export function MySoundsTab() {
     const { loaded, items } = useLibrary("sound");
-    const { playing } = useStore(clipStore);
+    const playing = useStore(clipStore, s => s.playing);
     const [query, setQuery] = useState("");
     const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -95,13 +95,13 @@ export function MySoundsTab() {
                 </div>
                 <div className={cl("scroller")}>
                     {!loaded ? (
-                        <EmptyState icon={<SpeakerIcon size={32} />} title="Loading your sounds..." />
+                        <EmptyState icon={<WaveformIcon size={28} />} title="Loading your sounds..." />
                     ) : items.length === 0 ? (
-                        <EmptyState icon={<SpeakerIcon size={32} />} title="No sounds yet">
+                        <EmptyState icon={<WaveformIcon size={28} />} title="No sounds yet">
                             Click <b>Add</b> or drop audio files here. Right-click a sound to rename it, change its volume or delete it.
                         </EmptyState>
                     ) : visible.length === 0 ? (
-                        <EmptyState icon={<SpeakerIcon size={32} />} title="No sounds match your search" />
+                        <EmptyState icon={<WaveformIcon size={28} />} title="No sounds match your search" />
                     ) : (
                         <div className={cl("grid")}>
                             {visible.map(item => (

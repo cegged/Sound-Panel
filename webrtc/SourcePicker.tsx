@@ -6,15 +6,13 @@
  */
 
 import { Switch } from "@components/Switch";
-import { Logger } from "@utils/Logger";
 import type { RenderModalProps } from "@vencord/discord-types";
 import { Modal, openModal, useEffect, useState } from "@webpack/common";
 
 import { cl } from "../components/common";
 import type { ScreenSource } from "../native";
+import { logger } from "../utils/logger";
 import { Native } from "../utils/native";
-
-const logger = new Logger("SoundPanel");
 
 export interface ScreenShareChoice {
     id: string;

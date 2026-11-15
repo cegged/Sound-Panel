@@ -5,35 +5,33 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { Logger } from "@utils/Logger";
 import type { Channel, SoundboardSound } from "@vencord/discord-types";
-import { findByCodeLazy } from "@webpack";
+import { findByCodeLazy, findByPropsLazy } from "@webpack";
 import {
-    ChannelStore,
     FluxDispatcher,
     GuildStore,
     IconUtils,
     MediaEngineStore,
     PermissionStore,
     RestAPI,
-    SelectedChannelStore,
     SoundboardStore,
-    UserStore
+    UserStore,
+    useStateFromStores
 } from "@webpack/common";
 
-import { mixerStore } from "../audio/mixer";
+import { isSelfMuted, mixerStore } from "../audio/mixer";
 import { settings } from "../settings";
+import { logger } from "../utils/logger";
 import { Native } from "../utils/native";
-
-const logger = new Logger("SoundPanel");
+import { useStore } from "../utils/store";
 
 const fetchSoundboardSounds: (options?: { disableAnalytics?: boolean; }) => Promise<unknown> =
     findByCodeLazy("SOUNDBOARD_FETCH_DEFAULT_SOUNDS");
+const EmojiUtils: { getURL(surrogate: string): string | undefined; } = findByPropsLazy("getURL", "getEmojiColors");
 
 const USE_SOUNDBOARD = 1n << 42n;
 const USE_EXTERNAL_SOUNDS = 1n << 45n;
-
-export const DEFAULT_SOUNDS_GUILD_ID = "0";
+const DEFAULT_SOUNDS_GUILD = "0";
 
 export interface SoundGroup {
     id: string;
@@ -42,8 +40,28 @@ export interface SoundGroup {
     sounds: SoundboardSound[];
 }
 
+export type SoundRoute =
+    // Discord's own soundboard: everyone hears it, on every client
+    | { kind: "soundboard"; }
+    | { kind: "microphone"; reason?: string; }
+    // Nobody else would hear it, so it's only previewed
+    | { kind: "local"; reason: string; };
+
+// Everything that decides where a sound plays, gathered once per render instead of once per sound
+export interface SoundContext {
+    channel?: Channel;
+    muted: boolean;
+    canUseSoundboard: boolean;
+    canUseExternalSounds: boolean;
+    hasNitro: boolean;
+    micReady: boolean;
+    preferMicrophone: boolean;
+}
+
 export const getSoundUrl = (soundId: string) => `https://cdn.discordapp.com/soundboard-sounds/${soundId}`;
 export const getEmojiUrl = (emojiId: string) => `https://cdn.discordapp.com/emojis/${emojiId}.webp?size=48`;
+// Discord's own artwork for unicode emoji, so sounds look the same as in its soundboard
+export const getUnicodeEmojiUrl = (emoji: string) => EmojiUtils.getURL(emoji);
 
 export async function loadSoundboardSounds() {
     try {
@@ -53,43 +71,37 @@ export async function loadSoundboardSounds() {
     }
 }
 
-export function getVoiceChannel(): Channel | undefined {
-    const channelId = SelectedChannelStore.getVoiceChannelId();
-    return channelId ? ChannelStore.getChannel(channelId) : undefined;
+export function useSoundContext(channel: Channel | undefined): SoundContext {
+    const muted = useStateFromStores([MediaEngineStore], isSelfMuted);
+    const canUseSoundboard = useStateFromStores([PermissionStore], () => !channel?.guild_id || PermissionStore.can(USE_SOUNDBOARD, channel), [channel]);
+    const canUseExternalSounds = useStateFromStores([PermissionStore], () => !channel?.guild_id || PermissionStore.can(USE_EXTERNAL_SOUNDS, channel), [channel]);
+    const hasNitro = useStateFromStores([UserStore], () => !!UserStore.getCurrentUser()?.premiumType);
+    const mixing = useStore(mixerStore, s => s.activeMixes > 0);
+    const { transmit, serverSoundsThroughMic } = settings.use(["transmit", "serverSoundsThroughMic"]);
+
+    return { channel, muted, canUseSoundboard, canUseExternalSounds, hasNitro, micReady: transmit && mixing, preferMicrophone: serverSoundsThroughMic };
 }
 
-// Returns why Discord's own soundboard can't play the sound in this channel, or null if it can
-function getSoundboardBlocker(sound: SoundboardSound, channel: Channel): string | null {
+function getSoundboardBlocker(sound: SoundboardSound, ctx: SoundContext) {
     if (!sound.available) return "This sound is unavailable";
+    if (!ctx.canUseSoundboard) return "You can't use the soundboard in this channel";
 
-    const isExternal = sound.guildId !== DEFAULT_SOUNDS_GUILD_ID && sound.guildId !== channel.guild_id;
-
-    if (channel.guild_id && !PermissionStore.can(USE_SOUNDBOARD, channel)) return "You can't use the soundboard in this channel";
-    if (isExternal && !UserStore.getCurrentUser()?.premiumType) return "Sounds from other servers need Nitro";
-    if (isExternal && channel.guild_id && !PermissionStore.can(USE_EXTERNAL_SOUNDS, channel)) return "Sounds from other servers aren't allowed here";
+    const external = sound.guildId !== DEFAULT_SOUNDS_GUILD && sound.guildId !== ctx.channel?.guild_id;
+    if (external && !ctx.hasNitro) return "Sounds from other servers need Nitro";
+    if (external && !ctx.canUseExternalSounds) return "Sounds from other servers aren't allowed here";
 
     return null;
 }
 
-export type SoundRoute =
-    // Discord's soundboard: everyone hears it on every client, with the soundboard animation
-    | { kind: "soundboard"; }
-    // Mixed into your microphone like your own sounds
-    | { kind: "microphone"; reason?: string; }
-    // Nobody else can hear it right now, so it's only previewed for you
-    | { kind: "local"; reason: string; };
+export function getSoundRoute(sound: SoundboardSound, ctx: SoundContext): SoundRoute {
+    if (!ctx.channel) return { kind: "local", reason: "Join a voice channel to play sounds for everyone" };
+    if (ctx.muted) return { kind: "local", reason: "Unmute to play sounds for everyone" };
 
-export const canUseMicrophone = () => settings.store.transmit && mixerStore.get().activeMixes > 0;
+    const blocker = getSoundboardBlocker(sound, ctx);
+    if (!blocker && !ctx.preferMicrophone) return { kind: "soundboard" };
+    if (ctx.micReady) return { kind: "microphone", reason: blocker ?? undefined };
 
-export function getSoundRoute(sound: SoundboardSound, channel: Channel | undefined): SoundRoute {
-    if (!channel) return { kind: "local", reason: "Join a voice channel to play sounds for everyone" };
-    if (MediaEngineStore.isSelfMute() || MediaEngineStore.isSelfDeaf()) return { kind: "local", reason: "Unmute to play sounds for everyone" };
-
-    const blocker = getSoundboardBlocker(sound, channel);
-    if (!blocker && !settings.store.serverSoundsThroughMic) return { kind: "soundboard" };
-    if (canUseMicrophone()) return { kind: "microphone", reason: blocker ?? undefined };
-
-    return { kind: "local", reason: blocker ?? "Your microphone isn't carrying custom audio. Check the status at the bottom of the panel" };
+    return { kind: "local", reason: blocker ?? "Your microphone isn't carrying custom audio, see the status at the bottom" };
 }
 
 const soundBlobs = new Map<string, Promise<Blob>>();
@@ -117,14 +129,14 @@ export function downloadSoundboardSound(soundId: string) {
     return blob;
 }
 
-// Same request Discord's soundboard makes, but the error is surfaced instead of swallowed
+// The same request Discord's soundboard makes, except errors aren't swallowed
 export async function playServerSound(sound: SoundboardSound, channel: Channel) {
     const body: Record<string, string | null> = {
         sound_id: sound.soundId,
         emoji_id: sound.emojiId,
         emoji_name: sound.emojiName
     };
-    if (sound.guildId !== DEFAULT_SOUNDS_GUILD_ID) body.source_guild_id = sound.guildId;
+    if (sound.guildId !== DEFAULT_SOUNDS_GUILD) body.source_guild_id = sound.guildId;
 
     try {
         await RestAPI.post({ url: `/channels/${channel.id}/send-soundboard-sound`, body });
@@ -139,15 +151,14 @@ export async function playServerSound(sound: SoundboardSound, channel: Channel) 
 
 export function getSoundGroups(): SoundGroup[] {
     const soundsByGuild = SoundboardStore.getSounds();
-    const allSounds = [...soundsByGuild.values()].flat();
     const favoriteIds = SoundboardStore.getFavorites();
     const groups: SoundGroup[] = [];
 
-    const favorites = allSounds.filter(sound => favoriteIds.has(sound.soundId));
+    const favorites = [...soundsByGuild.values()].flat().filter(sound => favoriteIds.has(sound.soundId));
     if (favorites.length) groups.push({ id: "favorites", name: "Favorites", sounds: favorites });
 
-    const guildGroups = [...soundsByGuild.entries()]
-        .filter(([guildId, sounds]) => guildId !== DEFAULT_SOUNDS_GUILD_ID && sounds.length)
+    const guildGroups = [...soundsByGuild]
+        .filter(([guildId, sounds]) => guildId !== DEFAULT_SOUNDS_GUILD && sounds.length)
         .map(([guildId, sounds]) => {
             const guild = GuildStore.getGuild(guildId);
             return {
@@ -161,8 +172,8 @@ export function getSoundGroups(): SoundGroup[] {
 
     groups.push(...guildGroups);
 
-    const defaults = soundsByGuild.get(DEFAULT_SOUNDS_GUILD_ID);
-    if (defaults?.length) groups.push({ id: DEFAULT_SOUNDS_GUILD_ID, name: "Discord Defaults", sounds: defaults });
+    const defaults = soundsByGuild.get(DEFAULT_SOUNDS_GUILD);
+    if (defaults?.length) groups.push({ id: "defaults", name: "Discord Defaults", sounds: defaults });
 
     return groups;
 }

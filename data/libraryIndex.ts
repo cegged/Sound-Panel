@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-// Shared by the renderer and the main process (native.ts), so keep this free of renderer-only imports
+// native.ts uses this in the main process too, so no renderer imports in here
 
 export type LibraryKind = "sound" | "music";
 

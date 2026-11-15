@@ -1,13 +1,13 @@
-/* ---------- Voice panel button ---------- */
+/* Voice panel button */
 
 .vc-soundpanel-panel-button {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 0;
-    border: 1px solid transparent;
-    cursor: pointer;
     min-width: 0;
+    padding: 0;
+    border: none;
+    cursor: pointer;
 }
 
 .vc-soundpanel-panel-button-contents {
@@ -19,20 +19,22 @@
     color: var(--text-feedback-positive) !important;
 }
 
-/* ---------- Popout shell ---------- */
+/* Popout shell */
 
 .vc-soundpanel-popout {
+    --vc-soundpanel-accent: var(--control-primary-background-default, var(--brand-500));
+
     display: flex;
     flex-direction: column;
-    width: 460px;
+    width: 480px;
     max-width: calc(100vw - 32px);
-    height: 560px;
+    height: 580px;
     max-height: calc(100vh - 96px);
     overflow: hidden;
     border: 1px solid var(--border-subtle);
-    border-radius: 12px;
-    background: var(--background-surface-high, var(--background-floating));
-    box-shadow: var(--shadow-high, 0 8px 24px rgb(0 0 0 / 40%));
+    border-radius: var(--radius-md, 12px);
+    background: var(--background-surface-high);
+    box-shadow: var(--shadow-high);
     color: var(--text-default);
     font-size: 14px;
 }
@@ -40,23 +42,46 @@
 .vc-soundpanel-header {
     display: flex;
     flex-direction: column;
+    gap: 12px;
+    padding: 14px 14px 12px;
+}
+
+.vc-soundpanel-title-row {
+    display: flex;
+    align-items: center;
     gap: 10px;
-    padding: 12px 12px 0;
-    border-bottom: 1px solid var(--border-subtle);
+}
+
+.vc-soundpanel-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-sm, 8px);
+    background: linear-gradient(
+        135deg,
+        var(--vc-soundpanel-accent),
+        color-mix(in oklab, var(--vc-soundpanel-accent) 60%, #000)
+    );
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 18%);
+    color: #fff;
 }
 
 .vc-soundpanel-title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: var(--header-primary, var(--text-strong));
+    flex: 1;
+    color: var(--text-strong);
     font-size: 16px;
-    font-weight: 600;
+    font-weight: 700;
 }
 
-.vc-soundpanel-tabs {
+.vc-soundpanel-tabs,
+.vc-soundpanel-source-tabs {
     display: flex;
-    gap: 4px;
+    gap: 2px;
+    padding: 3px;
+    border-radius: var(--radius-sm, 8px);
+    background: var(--background-base-lower);
 }
 
 .vc-soundpanel-tab-button {
@@ -65,32 +90,33 @@
     align-items: center;
     justify-content: center;
     gap: 6px;
-    padding: 8px 6px 10px;
+    height: 32px;
+    padding: 0 8px;
     border: none;
-    border-bottom: 2px solid transparent;
+    border-radius: 6px;
     background: none;
-    color: var(--interactive-normal, var(--text-muted));
+    color: var(--interactive-text-default);
     font-size: 13px;
-    font-weight: 500;
+    font-weight: 600;
     cursor: pointer;
+    transition:
+        background-color 0.15s ease,
+        color 0.15s ease;
 }
 
 .vc-soundpanel-tab-button:hover {
-    color: var(--interactive-hover, var(--text-default));
+    background: var(--interactive-background-hover);
+    color: var(--interactive-text-hover);
 }
 
-.vc-soundpanel-tab-button-active {
-    border-bottom-color: var(--brand-500, #5865f2);
-    color: var(--interactive-active, var(--text-strong));
+.vc-soundpanel-tab-button-active,
+.vc-soundpanel-tab-button-active:hover {
+    background: var(--background-surface-highest);
+    box-shadow: 0 1px 3px rgb(0 0 0 / 24%);
+    color: var(--interactive-text-active);
 }
 
-.vc-soundpanel-body {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    min-height: 0;
-}
-
+.vc-soundpanel-body,
 .vc-soundpanel-tab {
     display: flex;
     flex: 1;
@@ -102,66 +128,86 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 10px 12px;
+    padding: 0 14px 10px;
+}
+
+.vc-soundpanel-toolbar .vc-soundpanel-icon-button {
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--border-subtle);
+    background: var(--background-mod-subtle);
 }
 
 .vc-soundpanel-scroller {
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    padding: 0 12px 12px;
+    padding: 0 14px 14px;
     scrollbar-width: thin;
-    scrollbar-color: var(--scrollbar-thin-thumb, var(--background-mod-strong)) transparent;
+    scrollbar-color: var(--scrollbar-thin-thumb) transparent;
 }
 
 .vc-soundpanel-notice {
-    margin: 0 12px 8px;
+    margin: 0 14px 10px;
     padding: 8px 10px;
-    border-radius: 8px;
-    background: var(--background-mod-subtle, var(--background-secondary));
+    border-radius: var(--radius-sm, 8px);
+    background: var(--background-mod-subtle);
     color: var(--text-muted);
     font-size: 12px;
+    line-height: 16px;
 }
 
-/* ---------- Inputs ---------- */
+/* Inputs */
 
 .vc-soundpanel-search {
     display: flex;
     flex: 1;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     min-width: 0;
-    padding: 0 10px;
-    height: 32px;
-    border: 1px solid var(--input-border, var(--border-subtle));
-    border-radius: 8px;
-    background: var(--input-background, var(--background-base-lowest));
-    color: var(--text-muted);
+    height: 36px;
+    padding: 0 12px;
+    border: 1px solid var(--input-border-default);
+    border-radius: var(--radius-sm, 8px);
+    background: var(--input-background-default);
+    color: var(--input-icon-default, var(--icon-muted));
+    cursor: text;
+    transition: border-color 0.15s ease;
+}
+
+.vc-soundpanel-search:hover {
+    border-color: var(--input-border-hover);
 }
 
 .vc-soundpanel-search:focus-within {
-    border-color: var(--brand-500, #5865f2);
+    border-color: var(--input-border-active);
 }
 
 .vc-soundpanel-search input {
     flex: 1;
     min-width: 0;
+    padding: 0;
     border: none;
     outline: none;
     background: none;
-    color: var(--text-default);
+    color: var(--input-text-default, var(--text-default));
     font-size: 14px;
+}
+
+.vc-soundpanel-search input::placeholder {
+    color: var(--input-placeholder-text-default, var(--text-muted));
 }
 
 .vc-soundpanel-rename-input {
     flex: 1;
     min-width: 0;
-    padding: 2px 6px;
-    border: 1px solid var(--brand-500, #5865f2);
-    border-radius: 4px;
+    height: 26px;
+    padding: 0 8px;
+    border: 1px solid var(--input-border-active);
+    border-radius: var(--radius-xs, 4px);
     outline: none;
-    background: var(--input-background, var(--background-base-lowest));
-    color: var(--text-default);
+    background: var(--input-background-default);
+    color: var(--input-text-default, var(--text-default));
     font-size: 13px;
 }
 
@@ -172,45 +218,76 @@
     margin: 0;
     border-radius: 2px;
     appearance: none;
-    background: linear-gradient(to right, var(--brand-500, #5865f2) var(--vc-soundpanel-fill), var(--background-mod-strong, #4e5058) var(--vc-soundpanel-fill));
+    background: linear-gradient(
+        to right,
+        var(--vc-soundpanel-accent) var(--vc-soundpanel-fill),
+        var(--background-mod-strong) var(--vc-soundpanel-fill)
+    );
     cursor: pointer;
 }
 
 .vc-soundpanel-range::-webkit-slider-thumb {
-    width: 12px;
-    height: 12px;
+    width: 14px;
+    height: 14px;
+    border: none;
     border-radius: 50%;
     appearance: none;
-    background: var(--white, #fff);
-    box-shadow: 0 1px 3px rgb(0 0 0 / 40%);
+    background: #fff;
+    box-shadow: 0 1px 4px rgb(0 0 0 / 40%);
+    transition: transform 0.15s ease;
 }
 
-/* ---------- Buttons ---------- */
+.vc-soundpanel-range::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border: none;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 4px rgb(0 0 0 / 40%);
+}
+
+.vc-soundpanel-range:hover::-webkit-slider-thumb,
+.vc-soundpanel-range:active::-webkit-slider-thumb {
+    transform: scale(1.2);
+}
+
+.vc-soundpanel-range:focus-visible {
+    outline: 2px solid var(--border-focus);
+    outline-offset: 4px;
+}
+
+/* Buttons */
 
 .vc-soundpanel-action-button {
     display: flex;
     flex-shrink: 0;
     align-items: center;
     gap: 6px;
-    height: 32px;
-    padding: 0 12px;
+    height: 36px;
+    padding: 0 14px 0 10px;
     border: none;
-    border-radius: 8px;
-    font-size: 13px;
-    font-weight: 500;
+    border-radius: var(--radius-sm, 8px);
+    font-size: 14px;
+    font-weight: 600;
     cursor: pointer;
+    transition: background-color 0.15s ease;
 }
 
 .vc-soundpanel-primary {
-    background: var(--brand-500, #5865f2);
-    color: var(--white, #fff);
+    background: var(--control-primary-background-default, var(--brand-500));
+    color: var(--control-primary-text-default, #fff);
 }
 
 .vc-soundpanel-primary:hover {
-    background: var(--brand-560, #4752c4);
+    background: var(--control-primary-background-hover, var(--brand-560));
+}
+
+.vc-soundpanel-primary:active {
+    background: var(--control-primary-background-active, var(--brand-560));
 }
 
 .vc-soundpanel-icon-button {
+    position: relative;
     display: flex;
     flex-shrink: 0;
     align-items: center;
@@ -219,24 +296,53 @@
     height: 32px;
     padding: 0;
     border: none;
-    border-radius: 8px;
+    border-radius: var(--radius-sm, 8px);
     background: none;
-    color: var(--interactive-normal, var(--text-muted));
+    color: var(--interactive-icon-default, var(--icon-muted));
     cursor: pointer;
+    transition:
+        background-color 0.15s ease,
+        color 0.15s ease;
 }
 
 .vc-soundpanel-icon-button:hover:not(:disabled) {
-    background: var(--background-mod-subtle, var(--background-modifier-hover));
-    color: var(--interactive-hover, var(--text-default));
+    background: var(--interactive-background-hover);
+    color: var(--interactive-icon-hover, var(--icon-strong));
+}
+
+.vc-soundpanel-icon-button:active:not(:disabled) {
+    background: var(--interactive-background-active);
 }
 
 .vc-soundpanel-icon-button:disabled {
-    opacity: 0.4;
+    opacity: 0.35;
     cursor: default;
 }
 
-.vc-soundpanel-icon-button-active {
-    color: var(--brand-500, #5865f2);
+.vc-soundpanel-icon-button-active,
+.vc-soundpanel-icon-button-active:hover:not(:disabled) {
+    color: var(--text-brand);
+}
+
+/* A dot under toggles that are on, like shuffle and repeat */
+.vc-soundpanel-icon-button-active::after {
+    position: absolute;
+    bottom: 3px;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: currentColor;
+    content: "";
+}
+
+.vc-soundpanel-stop-all:not(:disabled),
+.vc-soundpanel-stop-all:hover:not(:disabled) {
+    background: color-mix(in oklab, var(--status-danger) 12%, transparent);
+    color: var(--status-danger);
+}
+
+.vc-soundpanel-stop-all:hover:not(:disabled) {
+    background: color-mix(in oklab, var(--status-danger) 22%, transparent);
 }
 
 .vc-soundpanel-link-button {
@@ -246,7 +352,7 @@
     background: none;
     color: var(--text-link);
     font-size: 12px;
-    font-weight: 500;
+    font-weight: 600;
     cursor: pointer;
 }
 
@@ -254,23 +360,27 @@
     text-decoration: underline;
 }
 
-/* ---------- Sound tiles ---------- */
+/* Sound tiles */
 
-.vc-soundpanel-group {
-    margin-bottom: 8px;
+.vc-soundpanel-group + .vc-soundpanel-group {
+    margin-top: 6px;
 }
 
 .vc-soundpanel-group-header {
+    position: sticky;
+    top: 0;
+    z-index: 1;
     display: flex;
     align-items: center;
     gap: 8px;
     width: 100%;
-    padding: 6px 4px;
+    padding: 8px 2px;
     border: none;
-    background: none;
+    background: var(--background-surface-high);
     color: var(--text-muted);
     font-size: 12px;
     font-weight: 600;
+    letter-spacing: 0.02em;
     text-transform: uppercase;
     cursor: pointer;
 }
@@ -280,9 +390,27 @@
 }
 
 .vc-soundpanel-group-icon {
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+    object-fit: cover;
+}
+
+.vc-soundpanel-group-icon-fallback {
+    background: var(--background-mod-strong);
+    color: var(--text-default);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0;
+}
+
+.vc-soundpanel-group-icon-favorites {
+    background: color-mix(in oklab, var(--status-warning) 18%, transparent);
+    color: var(--status-warning);
 }
 
 .vc-soundpanel-group-name {
@@ -294,12 +422,18 @@
 }
 
 .vc-soundpanel-group-count {
-    font-weight: 500;
+    min-width: 20px;
+    padding: 1px 6px;
+    border-radius: 10px;
+    background: var(--background-mod-subtle);
+    font-size: 11px;
+    letter-spacing: 0;
+    text-align: center;
 }
 
 .vc-soundpanel-chevron {
     display: flex;
-    transition: transform 0.15s ease;
+    transition: transform 0.2s ease;
 }
 
 .vc-soundpanel-chevron-collapsed {
@@ -308,7 +442,7 @@
 
 .vc-soundpanel-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(136px, 1fr));
     gap: 6px;
 }
 
@@ -316,67 +450,68 @@
     position: relative;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     min-width: 0;
-    height: 36px;
-    padding: 0 8px;
+    height: 44px;
+    padding: 0 10px 0 6px;
     overflow: hidden;
     border: 1px solid var(--border-subtle);
-    border-radius: 8px;
-    background: var(--background-mod-subtle, var(--background-secondary));
+    border-radius: var(--radius-sm, 8px);
+    background: var(--background-mod-subtle);
     color: var(--text-default);
     font-size: 13px;
+    font-weight: 500;
     text-align: left;
     cursor: pointer;
-    transition: background-color 0.1s ease, border-color 0.1s ease;
+    transition:
+        background-color 0.15s ease,
+        border-color 0.15s ease,
+        transform 0.1s ease;
 }
 
 .vc-soundpanel-tile:hover {
-    border-color: var(--border-strong, var(--border-subtle));
-    background: var(--background-mod-normal, var(--background-modifier-hover));
+    border-color: var(--border-normal);
+    background: var(--background-mod-normal);
+    color: var(--text-strong);
 }
 
 .vc-soundpanel-tile:active {
-    transform: scale(0.98);
+    transform: scale(0.97);
 }
 
 .vc-soundpanel-tile-local {
-    opacity: 0.65;
+    opacity: 0.6;
 }
 
-.vc-soundpanel-tile-playing {
-    border-color: var(--brand-500, #5865f2);
-    background: color-mix(in srgb, var(--brand-500, #5865f2) 18%, transparent);
-}
-
-.vc-soundpanel-tile-playing::after {
-    position: absolute;
-    inset: auto 0 0;
-    height: 2px;
-    content: "";
-    background: var(--brand-500, #5865f2);
-    animation: vc-soundpanel-progress 1.2s linear infinite;
-}
-
-@keyframes vc-soundpanel-progress {
-    from { transform: translateX(-100%); }
-    to { transform: translateX(100%); }
-}
-
-.vc-soundpanel-emoji {
+.vc-soundpanel-tile-icon {
     display: flex;
     flex-shrink: 0;
     align-items: center;
     justify-content: center;
-    width: 20px;
-    height: 20px;
-    color: var(--text-muted);
-    font-size: 16px;
-    line-height: 1;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    background: var(--background-mod-subtle);
+    color: var(--icon-muted);
+    transition:
+        background-color 0.15s ease,
+        color 0.15s ease;
 }
 
-img.vc-soundpanel-emoji {
+.vc-soundpanel-emoji {
+    width: 22px;
+    height: 22px;
+    font-size: 18px;
+    line-height: 22px;
+    text-align: center;
     object-fit: contain;
+}
+
+.vc-soundpanel-tile-text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
 }
 
 .vc-soundpanel-tile-name {
@@ -390,31 +525,78 @@ img.vc-soundpanel-emoji {
 .vc-soundpanel-tile-badge {
     display: flex;
     flex-shrink: 0;
-    color: var(--text-muted);
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--background-mod-normal);
+    color: var(--icon-muted);
 }
 
 .vc-soundpanel-tile-meta {
-    flex-shrink: 0;
     color: var(--text-muted);
     font-size: 11px;
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
+    line-height: 14px;
 }
 
-/* ---------- Music ---------- */
+.vc-soundpanel-tile-playing,
+.vc-soundpanel-tile-playing:hover {
+    border-color: color-mix(in oklab, var(--vc-soundpanel-accent) 70%, transparent);
+    background: color-mix(in oklab, var(--vc-soundpanel-accent) 16%, transparent);
+    color: var(--text-strong);
+}
+
+.vc-soundpanel-tile-playing .vc-soundpanel-tile-icon {
+    background: var(--vc-soundpanel-accent);
+    color: #fff;
+}
+
+.vc-soundpanel-tile-playing::after {
+    position: absolute;
+    inset: auto 0 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--vc-soundpanel-accent), transparent);
+    content: "";
+    animation: vc-soundpanel-sweep 1.2s linear infinite;
+}
+
+@keyframes vc-soundpanel-sweep {
+    from {
+        transform: translateX(-100%);
+    }
+    to {
+        transform: translateX(100%);
+    }
+}
+
+/* Music */
 
 .vc-soundpanel-now-playing {
+    --vc-soundpanel-hue: 235;
+
     display: flex;
     flex-direction: column;
     gap: 10px;
-    margin: 12px 12px 0;
-    padding: 12px;
-    border-radius: 10px;
-    background: var(--background-mod-subtle, var(--background-secondary));
+    margin: 0 14px 12px;
+    padding: 14px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md, 12px);
+    background:
+        radial-gradient(
+            120% 140% at 0% 0%,
+            hsl(var(--vc-soundpanel-hue) 80% 60% / 22%),
+            transparent 60%
+        ),
+        var(--background-mod-subtle);
 }
 
 .vc-soundpanel-now-playing-info {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     min-width: 0;
 }
 
@@ -423,16 +605,26 @@ img.vc-soundpanel-emoji {
     flex-shrink: 0;
     align-items: center;
     justify-content: center;
-    width: 44px;
-    height: 44px;
-    border-radius: 8px;
-    background: var(--background-mod-strong, var(--background-tertiary));
-    color: var(--text-muted);
+    width: 52px;
+    height: 52px;
+    border-radius: var(--radius-sm, 8px);
+    background: linear-gradient(
+        135deg,
+        hsl(var(--vc-soundpanel-hue) 70% 58%),
+        hsl(calc(var(--vc-soundpanel-hue) + 45) 70% 42%)
+    );
+    box-shadow: 0 4px 12px hsl(var(--vc-soundpanel-hue) 70% 25% / 40%);
+    color: #fff;
 }
 
 .vc-soundpanel-now-playing-art-active {
-    background: var(--brand-500, #5865f2);
-    color: var(--white, #fff);
+    animation: vc-soundpanel-breathe 2.4s ease-in-out infinite;
+}
+
+@keyframes vc-soundpanel-breathe {
+    50% {
+        transform: scale(1.05);
+    }
 }
 
 .vc-soundpanel-now-playing-text {
@@ -441,13 +633,15 @@ img.vc-soundpanel-emoji {
 
 .vc-soundpanel-now-playing-title {
     overflow: hidden;
-    color: var(--text-strong, var(--header-primary));
+    color: var(--text-strong);
+    font-size: 15px;
     font-weight: 600;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
 .vc-soundpanel-now-playing-subtitle {
+    margin-top: 2px;
     color: var(--text-muted);
     font-size: 12px;
 }
@@ -460,8 +654,7 @@ img.vc-soundpanel-emoji {
 }
 
 .vc-soundpanel-inline-volume {
-    color: var(--text-muted);
-    font-size: 12px;
+    color: var(--icon-muted);
 }
 
 .vc-soundpanel-time,
@@ -478,26 +671,37 @@ img.vc-soundpanel-emoji {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: 12px;
+}
+
+.vc-soundpanel-transport .vc-soundpanel-icon-button {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
 }
 
 .vc-soundpanel-play-button {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 40px;
-    height: 40px;
+    width: 44px;
+    height: 44px;
     padding: 0;
     border: none;
     border-radius: 50%;
-    background: var(--white, #fff);
-    color: var(--black, #000);
+    background: var(--text-strong);
+    box-shadow: 0 2px 8px rgb(0 0 0 / 30%);
+    color: var(--background-surface-high);
     cursor: pointer;
-    transition: transform 0.1s ease;
+    transition: transform 0.15s ease;
 }
 
 .vc-soundpanel-play-button:hover:not(:disabled) {
     transform: scale(1.06);
+}
+
+.vc-soundpanel-play-button:active:not(:disabled) {
+    transform: scale(0.96);
 }
 
 .vc-soundpanel-play-button:disabled {
@@ -514,23 +718,25 @@ img.vc-soundpanel-emoji {
 .vc-soundpanel-track {
     display: flex;
     align-items: center;
-    gap: 10px;
-    min-height: 36px;
-    padding: 0 8px;
-    border-radius: 6px;
+    gap: 12px;
+    min-height: 40px;
+    padding: 0 10px;
+    border-radius: var(--radius-sm, 8px);
     cursor: pointer;
+    transition: background-color 0.15s ease;
 }
 
 .vc-soundpanel-track:hover {
-    background: var(--background-mod-subtle, var(--background-modifier-hover));
+    background: var(--background-mod-subtle);
 }
 
-.vc-soundpanel-track-active {
-    background: color-mix(in srgb, var(--brand-500, #5865f2) 16%, transparent);
+.vc-soundpanel-track-active,
+.vc-soundpanel-track-active:hover {
+    background: color-mix(in oklab, var(--vc-soundpanel-accent) 14%, transparent);
 }
 
 .vc-soundpanel-track-active .vc-soundpanel-track-name {
-    color: var(--text-strong, var(--header-primary));
+    color: var(--text-strong);
     font-weight: 600;
 }
 
@@ -570,7 +776,7 @@ img.vc-soundpanel-emoji {
 .vc-soundpanel-equalizer i {
     width: 3px;
     border-radius: 1px;
-    background: var(--brand-500, #5865f2);
+    background: var(--text-brand);
     animation: vc-soundpanel-bounce 0.9s ease-in-out infinite;
 }
 
@@ -583,35 +789,49 @@ img.vc-soundpanel-emoji {
 }
 
 @keyframes vc-soundpanel-bounce {
-    0%, 100% { height: 3px; }
-    50% { height: 12px; }
+    0%,
+    100% {
+        height: 3px;
+    }
+    50% {
+        height: 12px;
+    }
 }
 
-/* ---------- Empty states and drop zone ---------- */
+/* Empty states and drop zone */
 
 .vc-soundpanel-empty {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 6px;
-    padding: 40px 24px;
+    gap: 8px;
+    padding: 44px 24px;
     color: var(--text-muted);
     text-align: center;
 }
 
 .vc-soundpanel-empty-icon {
-    opacity: 0.6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    margin-bottom: 4px;
+    border-radius: 50%;
+    background: var(--background-mod-subtle);
+    color: var(--icon-muted);
 }
 
 .vc-soundpanel-empty-title {
-    color: var(--text-default);
+    color: var(--text-strong);
+    font-size: 15px;
     font-weight: 600;
 }
 
 .vc-soundpanel-empty-body {
     max-width: 300px;
     font-size: 13px;
-    line-height: 1.4;
+    line-height: 18px;
 }
 
 .vc-soundpanel-dropzone {
@@ -625,32 +845,42 @@ img.vc-soundpanel-emoji {
 .vc-soundpanel-dropzone-overlay {
     position: absolute;
     inset: 8px;
-    z-index: 1;
+    z-index: 2;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    border: 2px dashed var(--brand-500, #5865f2);
-    border-radius: 10px;
-    background: color-mix(in srgb, var(--background-surface-high, #2b2d31) 92%, transparent);
-    color: var(--text-default);
-    font-weight: 500;
+    gap: 12px;
+    border: 2px dashed var(--vc-soundpanel-accent);
+    border-radius: var(--radius-md, 12px);
+    background: color-mix(in oklab, var(--background-surface-high) 85%, transparent);
+    backdrop-filter: blur(4px);
+    color: var(--text-strong);
+    font-weight: 600;
     pointer-events: none;
 }
 
-/* ---------- Screen share picker ---------- */
+.vc-soundpanel-dropzone-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: var(--vc-soundpanel-accent);
+    color: #fff;
+}
+
+/* Screen share picker */
 
 .vc-soundpanel-source-tabs {
-    display: flex;
-    gap: 4px;
-    margin-bottom: 12px;
-    border-bottom: 1px solid var(--border-subtle);
+    display: inline-flex;
+    margin-bottom: 16px;
 }
 
 .vc-soundpanel-source-tabs .vc-soundpanel-tab-button {
     flex: none;
-    padding: 8px 14px 10px;
+    padding: 0 16px;
 }
 
 .vc-soundpanel-source-grid {
@@ -667,26 +897,35 @@ img.vc-soundpanel-emoji {
     min-width: 0;
     padding: 8px;
     border: 2px solid transparent;
-    border-radius: 10px;
-    background: var(--background-mod-subtle, var(--background-secondary));
+    border-radius: var(--radius-md, 12px);
+    background: var(--background-mod-subtle);
     color: var(--text-default);
     text-align: left;
     cursor: pointer;
+    transition:
+        background-color 0.15s ease,
+        border-color 0.15s ease;
 }
 
 .vc-soundpanel-source:hover {
-    background: var(--background-mod-normal, var(--background-modifier-hover));
+    background: var(--background-mod-normal);
 }
 
-.vc-soundpanel-source-selected {
-    border-color: var(--brand-500, #5865f2);
+.vc-soundpanel-source-selected,
+.vc-soundpanel-source-selected:hover {
+    border-color: var(--control-primary-background-default, var(--brand-500));
+    background: color-mix(
+        in oklab,
+        var(--control-primary-background-default, var(--brand-500)) 12%,
+        transparent
+    );
 }
 
 .vc-soundpanel-source-thumbnail {
     width: 100%;
     aspect-ratio: 16 / 9;
-    border-radius: 6px;
-    background: var(--background-base-lowest, #000);
+    border-radius: var(--radius-sm, 8px);
+    background: var(--background-base-lowest);
     object-fit: contain;
 }
 
@@ -696,6 +935,7 @@ img.vc-soundpanel-emoji {
     gap: 6px;
     min-width: 0;
     font-size: 13px;
+    font-weight: 500;
 }
 
 .vc-soundpanel-source-icon {
@@ -718,15 +958,15 @@ img.vc-soundpanel-emoji {
     font-size: 14px;
 }
 
-/* ---------- Footer ---------- */
+/* Footer */
 
 .vc-soundpanel-footer {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 10px 12px;
+    gap: 10px;
+    padding: 12px 14px;
     border-top: 1px solid var(--border-subtle);
-    background: var(--background-base-lower, var(--background-secondary-alt));
+    background: var(--background-base-lower);
 }
 
 .vc-soundpanel-status {
@@ -734,68 +974,94 @@ img.vc-soundpanel-emoji {
     align-items: center;
     gap: 8px;
     font-size: 12px;
+    line-height: 16px;
 }
 
 .vc-soundpanel-status-text {
     flex: 1;
     color: var(--text-muted);
-    line-height: 1.3;
 }
 
 .vc-soundpanel-status-dot {
+    position: relative;
     flex-shrink: 0;
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: var(--text-muted);
+    background: var(--icon-muted);
 }
 
 .vc-soundpanel-status-live .vc-soundpanel-status-dot {
-    background: var(--status-positive, #23a55a);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-positive, #23a55a) 25%, transparent);
+    background: var(--status-positive);
+}
+
+.vc-soundpanel-status-live .vc-soundpanel-status-dot::after {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: var(--status-positive);
+    content: "";
+    animation: vc-soundpanel-ping 1.8s ease-out infinite;
+}
+
+@keyframes vc-soundpanel-ping {
+    to {
+        opacity: 0;
+        transform: scale(2.6);
+    }
+}
+
+.vc-soundpanel-status-live .vc-soundpanel-status-text {
+    color: var(--text-default);
 }
 
 .vc-soundpanel-status-warning .vc-soundpanel-status-dot {
-    background: var(--status-warning, #f0b232);
+    background: var(--status-warning);
 }
 
 .vc-soundpanel-mixer {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
 }
 
 .vc-soundpanel-mixer-slider {
     display: flex;
     flex: 1;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     min-width: 0;
-    color: var(--text-muted);
+    color: var(--icon-muted);
 }
 
 .vc-soundpanel-toggle {
     display: flex;
     flex-shrink: 0;
     align-items: center;
-    gap: 4px;
-    height: 28px;
-    padding: 0 10px;
-    border: 1px solid var(--border-subtle);
-    border-radius: 14px;
+    gap: 6px;
+    height: 30px;
+    padding: 0 12px 0 10px;
+    border: 1px solid var(--border-normal);
+    border-radius: 15px;
     background: none;
-    color: var(--text-muted);
+    color: var(--interactive-text-default);
     font-size: 12px;
     font-weight: 600;
     cursor: pointer;
+    transition:
+        background-color 0.15s ease,
+        border-color 0.15s ease,
+        color 0.15s ease;
 }
 
-.vc-soundpanel-toggle-on {
+.vc-soundpanel-toggle:hover {
+    background: var(--interactive-background-hover);
+    color: var(--interactive-text-hover);
+}
+
+.vc-soundpanel-toggle-on,
+.vc-soundpanel-toggle-on:hover {
     border-color: transparent;
-    background: var(--status-positive, #23a55a);
-    color: var(--white, #fff);
-}
-
-.vc-soundpanel-stop-all:not(:disabled) {
-    color: var(--status-danger, #f23f43);
+    background: var(--status-positive);
+    color: #fff;
 }

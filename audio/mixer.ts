@@ -5,40 +5,32 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { Logger } from "@utils/Logger";
 import { sleep } from "@utils/misc";
 import { MediaEngineStore } from "@webpack/common";
 
 import { settings } from "../settings";
+import { logger } from "../utils/logger";
 import { createStore } from "../utils/store";
-import { upgradeCameraConstraints } from "../video/quality";
+import { usesDesktopWebRTC } from "../webrtc/engine";
+import { upgradeCameraConstraints } from "../webrtc/quality";
 
-// Audio graph:
-//   clip / music ─┬─> voiceBus ─┐
-//                 │             ├─> limiter ──> mixed microphone stream(s) ──> Discord (WebRTC)
-//   microphone ───┼─────────────┘
-//                 └─> localBus ──> limiter ──> speakers
+// sounds & music -> voiceBus -> limiter (with the microphone) -> what Discord sends
+//                -> localBus -> limiter -> your speakers
 
-const logger = new Logger("SoundPanel");
+export const MAX_VOICE_VOLUME = 150;
+
+// How many microphone streams currently carry our audio into a call
+export const mixerStore = createStore({ activeMixes: 0 });
 
 let context: AudioContext | null = null;
 let voiceBus: GainNode;
 let localBus: GainNode;
 let originalGetUserMedia: MediaDevices["getUserMedia"] | null = null;
 let forcingInput = false;
-// Discord picks its voice engine once at startup, so the setting only counts as of then
-let webrtcEngineActive = !IS_DISCORD_DESKTOP;
 
-export const isWebRTCEngineActive = () => webrtcEngineActive;
+export const isSelfMuted = () => MediaEngineStore.isSelfMute() || MediaEngineStore.isSelfDeaf();
 
-// activeMixes: microphone streams currently carrying our audio to Discord
-export const mixerStore = createStore({ activeMixes: 0 });
-
-type SinkTarget = { setSinkId(id: string): Promise<void>; };
-
-export const MAX_VOICE_VOLUME = 150;
-
-// Brick-wall limiter: full-scale files at boosted volume would otherwise clip, which sounds like crackling
+// Full-scale files at a boosted volume would clip and crackle without this
 function createLimiter(ctx: AudioContext) {
     const limiter = ctx.createDynamicsCompressor();
     limiter.threshold.value = -3;
@@ -55,12 +47,12 @@ export function getAudioContext() {
         voiceBus = context.createGain();
         localBus = context.createGain();
 
-        const localLimiter = createLimiter(context);
-        localBus.connect(localLimiter);
-        localLimiter.connect(context.destination);
+        const limiter = createLimiter(context);
+        localBus.connect(limiter);
+        limiter.connect(context.destination);
 
         applyVolumes();
-        void applyOutputDevice();
+        applyOutputDevice();
     }
 
     if (context.state === "suspended") context.resume().catch(() => { });
@@ -81,33 +73,27 @@ export function applyVolumes() {
     localBus.gain.value = localVolume / 100;
 }
 
-function getOutputDeviceId() {
+export async function routeToOutputDevice(target: AudioContext | HTMLMediaElement) {
     const deviceId = MediaEngineStore.getOutputDeviceId();
-    return !deviceId || deviceId === "default" ? "" : deviceId;
-}
-
-// Sends an audio context or element to the output device selected in Discord
-export async function routeToOutputDevice(target: object) {
-    if (!("setSinkId" in target)) return;
 
     try {
-        await (target as SinkTarget).setSinkId(getOutputDeviceId());
+        await (target as { setSinkId?(id: string): Promise<void>; }).setSinkId?.(!deviceId || deviceId === "default" ? "" : deviceId);
     } catch {
-        // The native voice engine uses its own device ids which the browser doesn't know about
+        // The native engine's device ids mean nothing to the browser
     }
 }
 
-export async function applyOutputDevice() {
-    if (context) await routeToOutputDevice(context);
+export function applyOutputDevice() {
+    if (context) void routeToOutputDevice(context);
 }
 
 async function mixWithMicrophone(microphone: MediaStream) {
     const ctx = getAudioContext();
     if (ctx.state !== "running") await Promise.race([ctx.resume(), sleep(500)]);
 
-    // Never hand Discord a silent stream; fall back to the plain microphone instead
+    // A suspended context would send silence, so hand Discord the plain microphone instead
     if (ctx.state !== "running") {
-        logger.warn("Audio context is not running, microphone will not be mixed");
+        logger.warn("Audio context isn't running, not mixing the microphone");
         return microphone;
     }
 
@@ -139,22 +125,19 @@ async function mixWithMicrophone(microphone: MediaStream) {
 }
 
 export function installMicrophoneHook() {
-    webrtcEngineActive = !IS_DISCORD_DESKTOP || settings.store.webrtcEngine;
-
     const devices = navigator.mediaDevices;
     if (!devices || originalGetUserMedia) return;
 
     const original = originalGetUserMedia = devices.getUserMedia;
 
     devices.getUserMedia = async function (constraints) {
-        const request = IS_DISCORD_DESKTOP && webrtcEngineActive ? upgradeCameraConstraints(constraints) : constraints;
-        const stream = await original.call(this, request);
+        const stream = await original.call(this, usesDesktopWebRTC() ? upgradeCameraConstraints(constraints) : constraints);
         if (!constraints?.audio || constraints.video) return stream;
 
         try {
             return await mixWithMicrophone(stream);
         } catch (err) {
-            logger.error("Failed to mix microphone", err);
+            logger.error("Failed to mix the microphone", err);
             return stream;
         }
     };
@@ -167,15 +150,15 @@ export function uninstallMicrophoneHook() {
     originalGetUserMedia = null;
 }
 
-// Keeps Push to Talk users transmitting while our audio plays
+// Keeps Push to Talk transmitting while our audio plays
 export function setPlaybackActive(active: boolean) {
     const { transmit, holdPushToTalk } = settings.store;
-    const shouldForce = active && transmit && holdPushToTalk && MediaEngineStore.getMode() === "PUSH_TO_TALK";
-    if (shouldForce === forcingInput) return;
+    const force = active && transmit && holdPushToTalk && MediaEngineStore.getMode() === "PUSH_TO_TALK";
+    if (force === forcingInput) return;
 
-    forcingInput = shouldForce;
+    forcingInput = force;
     try {
-        MediaEngineStore.getMediaEngine().eachConnection(conn => conn.setForceAudioInput?.(shouldForce), "default");
+        MediaEngineStore.getMediaEngine().eachConnection(conn => conn.setForceAudioInput?.(force), "default");
     } catch (err) {
         logger.error("Failed to toggle forced audio input", err);
     }

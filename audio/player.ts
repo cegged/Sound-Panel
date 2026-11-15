@@ -5,16 +5,11 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { Logger } from "@utils/Logger";
-
 import { getFileUrl, getItems, LibraryItem } from "../data/library";
 import { RepeatMode, settings } from "../settings";
+import { logger } from "../utils/logger";
 import { createStore, useStore } from "../utils/store";
 import { connectToOutputs, getAudioContext, routeToOutputDevice, setPlaybackActive } from "./mixer";
-
-const logger = new Logger("SoundPanel");
-
-// ---------- Clips (your sounds and previews) ----------
 
 interface Clip {
     key: string;
@@ -22,23 +17,30 @@ interface Clip {
     dispose(): void;
 }
 
-interface ClipOptions {
-    key: string;
-    url: string;
-    volume: number;
-    localOnly?: boolean;
-}
-
 const clips = new Set<Clip>();
 
 export const clipStore = createStore({ playing: [] as string[] });
+
+export const musicStore = createStore({
+    currentId: null as string | null,
+    playing: false,
+    position: 0,
+    duration: 0
+});
+
+let musicAudio: HTMLAudioElement | null = null;
+let musicSource: MediaElementAudioSourceNode | null = null;
+let musicGain: GainNode | null = null;
+
+function updatePlaybackActive() {
+    setPlaybackActive([...clips].some(clip => !clip.localOnly) || musicStore.get().playing);
+}
 
 function syncClips() {
     clipStore.set({ playing: [...clips].map(clip => clip.key) });
     updatePlaybackActive();
 }
 
-// Routes the clip through the audio graph so it reaches both the voice channel and your speakers
 function routeThroughMixer(audio: HTMLAudioElement, volume: number) {
     const ctx = getAudioContext();
     const source = ctx.createMediaElementSource(audio);
@@ -53,14 +55,14 @@ function routeThroughMixer(audio: HTMLAudioElement, volume: number) {
     };
 }
 
-// Plays straight to your speakers. Skips the audio graph, which would need CORS for Discord CDN urls
+// Skips the audio graph, which would need CORS headers that Discord's CDN doesn't send to PTB and Canary
 function playDirectly(audio: HTMLAudioElement, volume: number) {
     audio.volume = Math.min(1, volume * (settings.store.localVolume / 100));
     void routeToOutputDevice(audio);
     return () => { };
 }
 
-export async function playClip({ key, url, volume, localOnly = false }: ClipOptions) {
+export async function playClip({ key, url, volume, localOnly = false }: { key: string; url: string; volume: number; localOnly?: boolean; }) {
     if (!settings.store.allowOverlap) stopClips();
 
     const audio = new Audio(url);
@@ -82,7 +84,7 @@ export async function playClip({ key, url, volume, localOnly = false }: ClipOpti
 
     audio.addEventListener("ended", clip.dispose);
     audio.addEventListener("error", () => {
-        logger.error(`Failed to load audio for "${key}"`, audio.error);
+        logger.error(`Failed to load audio for ${key}`, audio.error);
         clip.dispose();
     });
     clips.add(clip);
@@ -104,22 +106,9 @@ export function stopClip(key: string) {
     [...clips].filter(clip => clip.key === key).forEach(clip => clip.dispose());
 }
 
-export function stopClips() {
+function stopClips() {
     [...clips].forEach(clip => clip.dispose());
 }
-
-// ---------- Music ----------
-
-export const musicStore = createStore({
-    currentId: null as string | null,
-    playing: false,
-    position: 0,
-    duration: 0
-});
-
-let musicAudio: HTMLAudioElement | null = null;
-let musicSource: MediaElementAudioSourceNode | null = null;
-let musicGain: GainNode | null = null;
 
 function getMusicElement() {
     if (musicAudio) return musicAudio;
@@ -132,18 +121,18 @@ function getMusicElement() {
     connectToOutputs(musicGain);
     applyMusicVolume();
 
+    const setPlaying = (playing: boolean) => {
+        musicStore.set({ playing });
+        updatePlaybackActive();
+    };
+
     audio.addEventListener("timeupdate", () => musicStore.set({ position: audio.currentTime }));
     audio.addEventListener("durationchange", () => musicStore.set({ duration: Number.isFinite(audio.duration) ? audio.duration : 0 }));
-    audio.addEventListener("play", () => setMusicPlaying(true));
-    audio.addEventListener("pause", () => setMusicPlaying(false));
+    audio.addEventListener("play", () => setPlaying(true));
+    audio.addEventListener("pause", () => setPlaying(false));
     audio.addEventListener("ended", onTrackEnded);
 
     return audio;
-}
-
-function setMusicPlaying(playing: boolean) {
-    musicStore.set({ playing });
-    updatePlaybackActive();
 }
 
 function getCurrentTrack() {
@@ -152,8 +141,7 @@ function getCurrentTrack() {
 }
 
 export function applyMusicVolume() {
-    if (!musicGain) return;
-    musicGain.gain.value = (settings.store.musicVolume / 100) * (getCurrentTrack()?.volume ?? 1);
+    if (musicGain) musicGain.gain.value = (settings.store.musicVolume / 100) * (getCurrentTrack()?.volume ?? 1);
 }
 
 export async function playTrack(id: string) {
@@ -170,17 +158,18 @@ export async function toggleMusic() {
     if (!getCurrentTrack()) {
         const [first] = getItems("music");
         if (first) await playTrack(first.id);
-        return;
+    } else if (audio.paused) {
+        await audio.play();
+    } else {
+        audio.pause();
     }
-
-    if (audio.paused) await audio.play();
-    else audio.pause();
 }
 
 export async function skipTrack(direction: 1 | -1, automatic = false) {
     const tracks = getItems("music");
     if (!tracks.length) return;
 
+    // Like most players, "previous" restarts the track unless it just started
     if (direction === -1 && musicAudio && musicAudio.currentTime > 3) {
         musicAudio.currentTime = 0;
         return;
@@ -210,11 +199,11 @@ export async function skipTrack(direction: 1 | -1, automatic = false) {
 function onTrackEnded() {
     if (settings.store.repeatMode === "one" && musicAudio) {
         musicAudio.currentTime = 0;
-        musicAudio.play().catch(err => logger.error("Failed to repeat track", err));
+        musicAudio.play().catch(err => logger.error("Failed to repeat the track", err));
         return;
     }
 
-    skipTrack(1, true).catch(err => logger.error("Failed to play next track", err));
+    skipTrack(1, true).catch(err => logger.error("Failed to play the next track", err));
 }
 
 export function seekMusic(seconds: number) {
@@ -224,7 +213,7 @@ export function seekMusic(seconds: number) {
     musicStore.set({ position: seconds });
 }
 
-export function stopMusic() {
+function stopMusic() {
     if (!musicAudio) return;
 
     musicAudio.pause();
@@ -232,7 +221,7 @@ export function stopMusic() {
     musicStore.set({ position: 0 });
 }
 
-// Unloads the track if it is the current one, used before deleting or moving it
+// Unloads the track before it's deleted or moved out of the playlist
 export function releaseTrack(id: string) {
     if (!musicAudio || musicStore.get().currentId !== id) return;
 
@@ -251,12 +240,6 @@ export function cycleRepeatMode() {
 
 export function toggleShuffle() {
     settings.store.shuffle = !settings.store.shuffle;
-}
-
-// ---------- Shared ----------
-
-function updatePlaybackActive() {
-    setPlaybackActive([...clips].some(clip => !clip.localOnly) || musicStore.get().playing);
 }
 
 export function stopAll() {
@@ -281,7 +264,7 @@ export function disposePlayer() {
 }
 
 export function useIsPlaying() {
-    const { playing: clipsPlaying } = useStore(clipStore);
-    const { playing: musicPlaying } = useStore(musicStore);
-    return clipsPlaying.length > 0 || musicPlaying;
+    const clipsPlaying = useStore(clipStore, s => s.playing.length > 0);
+    const musicPlaying = useStore(musicStore, s => s.playing);
+    return clipsPlaying || musicPlaying;
 }

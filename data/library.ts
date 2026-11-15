@@ -5,43 +5,41 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { Logger } from "@utils/Logger";
+import { useMemo } from "@webpack/common";
 
+import { logger } from "../utils/logger";
 import { createStore, useStore } from "../utils/store";
 import type { LibraryItem, LibraryKind, LibraryPatch } from "./libraryIndex";
 import { migrateLegacyLibrary, storage } from "./storage";
 
 export type { LibraryItem, LibraryKind } from "./libraryIndex";
 
-const logger = new Logger("SoundPanel");
-
 const AUDIO_EXTENSIONS = /\.(mp3|wav|ogg|oga|opus|m4a|aac|flac|webm|weba)$/i;
 
-export const libraryStore = createStore({ loaded: false, items: [] as LibraryItem[] });
-
+const libraryStore = createStore({ loaded: false, items: [] as LibraryItem[] });
 const fileUrls = new Map<string, string>();
 let loadPromise: Promise<void> | undefined;
 
 const setItems = (items: LibraryItem[]) => libraryStore.set({ loaded: true, items });
 
-export function loadLibrary() {
+function loadLibrary() {
     return loadPromise ??= storage.readIndex()
         .then(migrateLegacyLibrary)
         .then(setItems)
         .catch(err => {
             loadPromise = undefined;
-            logger.error("Failed to load library", err);
+            logger.error("Failed to load the library", err);
         });
 }
 
-// Picks up changes made in another Discord app sharing the library
+// Also picks up changes made from another Discord app that shares the library
 export async function refreshLibrary() {
     if (!libraryStore.get().loaded) return loadLibrary();
 
     try {
         setItems(await storage.readIndex());
     } catch (err) {
-        logger.error("Failed to refresh library", err);
+        logger.error("Failed to refresh the library", err);
     }
 }
 
@@ -50,12 +48,10 @@ export function getItems(kind: LibraryKind) {
 }
 
 export function useLibrary(kind: LibraryKind) {
-    const { loaded, items } = useStore(libraryStore);
-    return { loaded, items: items.filter(item => item.kind === kind) };
-}
-
-export function isAudioFile(file: File) {
-    return file.type.startsWith("audio/") || AUDIO_EXTENSIONS.test(file.name);
+    const loaded = useStore(libraryStore, s => s.loaded);
+    const all = useStore(libraryStore, s => s.items);
+    const items = useMemo(() => all.filter(item => item.kind === kind), [all, kind]);
+    return { loaded, items };
 }
 
 function readDuration(blob: Blob) {
@@ -75,18 +71,16 @@ function readDuration(blob: Blob) {
     });
 }
 
-const stripExtension = (name: string) => name.replace(/\.[^.]+$/, "");
-
 export async function addFiles(files: File[], kind: LibraryKind) {
     await loadLibrary();
 
-    const audioFiles = files.filter(isAudioFile);
+    const audioFiles = files.filter(file => file.type.startsWith("audio/") || AUDIO_EXTENSIONS.test(file.name));
     const added: LibraryItem[] = [];
 
     for (const file of audioFiles) {
         const item: LibraryItem = {
             id: crypto.randomUUID(),
-            name: stripExtension(file.name) || "Untitled",
+            name: file.name.replace(/\.[^.]+$/, "") || "Untitled",
             kind,
             mimeType: file.type,
             size: file.size,
@@ -104,7 +98,7 @@ export async function addFiles(files: File[], kind: LibraryKind) {
     return { added: added.length, skipped: files.length - audioFiles.length };
 }
 
-export async function addBlob(blob: Blob, name: string, kind: LibraryKind) {
+export function addBlob(blob: Blob, name: string, kind: LibraryKind) {
     const type = blob.type || "audio/ogg";
     const extension = type === "audio/mpeg" ? "mp3" : type.split("/")[1];
     return addFiles([new File([blob], `${name}.${extension}`, { type })], kind);
@@ -126,7 +120,7 @@ export async function getFileUrl(id: string) {
 
     const item = libraryStore.get().items.find(i => i.id === id);
     const blob = await storage.readFile(id, item?.mimeType ?? "");
-    if (!blob) throw new Error("Audio file is missing from storage");
+    if (!blob) throw new Error("The audio file is missing");
 
     const url = URL.createObjectURL(blob);
     fileUrls.set(id, url);
@@ -142,5 +136,6 @@ function revokeFileUrl(id: string) {
 }
 
 export function revokeAllFileUrls() {
-    for (const id of [...fileUrls.keys()]) revokeFileUrl(id);
+    fileUrls.forEach(url => URL.revokeObjectURL(url));
+    fileUrls.clear();
 }

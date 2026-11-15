@@ -12,17 +12,28 @@ import { join } from "path";
 
 import { applyIndexChange, type IndexChange, type LibraryItem } from "./data/libraryIndex";
 
-// ---------- Sound library ----------
-// Kept in Vencord's data folder, so Discord Stable, PTB and Canary all share one library
+export interface ScreenSource {
+    id: string;
+    name: string;
+    thumbnail: string;
+    icon: string | null;
+}
 
+// In Vencord's data folder, so Stable, PTB and Canary share one library
 const LIBRARY_DIR = join(DATA_DIR, "SoundPanel");
 const FILES_DIR = join(LIBRARY_DIR, "files");
 const INDEX_FILE = join(LIBRARY_DIR, "library.json");
-const FILE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const SOUNDBOARD_URL = /^https:\/\/cdn\.discordapp\.com\/soundboard-sounds\/\d+$/;
+const CAPTURE_TYPES: ("screen" | "window")[] = ["screen", "window"];
+
+let indexQueue: Promise<unknown> = Promise.resolve();
+let pendingSource: { id: string; audio: boolean; } | null = null;
+const sessionsWithHandler = new WeakSet<Session>();
 
 function libraryFilePath(id: string) {
     // Ids are UUIDs; anything else could point outside the library folder
-    if (!FILE_ID.test(id)) throw new Error("Invalid library file id");
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) throw new Error("Invalid library file id");
     return join(FILES_DIR, id);
 }
 
@@ -38,9 +49,11 @@ async function readIndexFile(): Promise<LibraryItem[]> {
     }
 }
 
-let indexQueue: Promise<unknown> = Promise.resolve();
+export function readLibraryIndex(_: IpcMainInvokeEvent) {
+    return readIndexFile();
+}
 
-// Read, change and write the index one change at a time, writing through a temp file so it's never half written
+// One change at a time, written through a temp file so the index is never left half written
 export function changeLibraryIndex(_: IpcMainInvokeEvent, change: IndexChange) {
     const task = indexQueue.then(async () => {
         const items = applyIndexChange(await readIndexFile(), change);
@@ -54,10 +67,6 @@ export function changeLibraryIndex(_: IpcMainInvokeEvent, change: IndexChange) {
 
     indexQueue = task.catch(() => { });
     return task;
-}
-
-export function readLibraryIndex(_: IpcMainInvokeEvent) {
-    return readIndexFile();
 }
 
 export async function writeLibraryFile(_: IpcMainInvokeEvent, id: string, data: Uint8Array) {
@@ -78,13 +87,9 @@ export async function deleteLibraryFile(_: IpcMainInvokeEvent, id: string) {
     await rm(libraryFilePath(id), { force: true });
 }
 
-// ---------- Soundboard ----------
-
-const SOUND_URL = /^https:\/\/cdn\.discordapp\.com\/soundboard-sounds\/\d+$/;
-
-// Downloads in the main process, where Discord's CDN CORS headers (broken on PTB/Canary) don't apply
+// Discord's CDN sends broken CORS headers to PTB and Canary, which doesn't matter out here
 export async function downloadSoundboardSound(_: IpcMainInvokeEvent, url: string) {
-    if (!SOUND_URL.test(url)) throw new Error("Only Discord soundboard sounds can be downloaded");
+    if (!SOUNDBOARD_URL.test(url)) throw new Error("Only Discord soundboard sounds can be downloaded");
 
     const res = await fetch(url);
     if (!res.ok) throw new Error(`Download failed with status ${res.status}`);
@@ -94,22 +99,6 @@ export async function downloadSoundboardSound(_: IpcMainInvokeEvent, url: string
         data: new Uint8Array(await res.arrayBuffer())
     };
 }
-
-// ---------- Screen share for the WebRTC voice engine ----------
-// Discord's desktop app captures the screen through its native engine. With the WebRTC engine it calls
-// getDisplayMedia like a browser, which Electron only allows through a display media request handler.
-
-export interface ScreenSource {
-    id: string;
-    name: string;
-    thumbnail: string;
-    icon: string | null;
-}
-
-const CAPTURE_TYPES: ("screen" | "window")[] = ["screen", "window"];
-
-let pendingSource: { id: string; audio: boolean; } | null = null;
-const sessionsWithHandler = new WeakSet<Session>();
 
 export async function getScreenSources(_: IpcMainInvokeEvent): Promise<ScreenSource[]> {
     const sources = await desktopCapturer.getSources({
@@ -126,7 +115,7 @@ export async function getScreenSources(_: IpcMainInvokeEvent): Promise<ScreenSou
     }));
 }
 
-// Remembers the picked source for the next getDisplayMedia call from this window
+// Electron only allows getDisplayMedia through a request handler, which gets the source picked for this call
 export function selectScreenSource(event: IpcMainInvokeEvent, id: string, audio: boolean) {
     pendingSource = { id, audio };
 
@@ -138,7 +127,7 @@ export function selectScreenSource(event: IpcMainInvokeEvent, id: string, audio:
         const choice = pendingSource;
         pendingSource = null;
 
-        // Nothing picked in our picker: deny, so getDisplayMedia rejects like a cancelled browser prompt
+        // Denying makes getDisplayMedia reject like a cancelled browser prompt
         if (!choice) return callback({});
 
         desktopCapturer.getSources({ types: CAPTURE_TYPES })
@@ -146,10 +135,7 @@ export function selectScreenSource(event: IpcMainInvokeEvent, id: string, audio:
                 const source = sources.find(s => s.id === choice.id);
                 if (!source) return callback({});
 
-                callback({
-                    video: source,
-                    audio: choice.audio && request.audioRequested ? "loopback" : undefined
-                });
+                callback({ video: source, audio: choice.audio && request.audioRequested ? "loopback" : undefined });
             })
             .catch(() => callback({}));
     });
