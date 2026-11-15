@@ -5,51 +5,44 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { createStore as createIdbStore, del, get, set, type UseStore } from "@api/DataStore";
 import { Logger } from "@utils/Logger";
 
 import { createStore, useStore } from "../utils/store";
+import type { LibraryItem, LibraryKind, LibraryPatch } from "./libraryIndex";
+import { migrateLegacyLibrary, storage } from "./storage";
 
-export type LibraryKind = "sound" | "music";
-
-export interface LibraryItem {
-    id: string;
-    name: string;
-    kind: LibraryKind;
-    mimeType: string;
-    size: number;
-    duration: number;
-    volume: number;
-    addedAt: number;
-}
+export type { LibraryItem, LibraryKind } from "./libraryIndex";
 
 const logger = new Logger("SoundPanel");
 
-const INDEX_KEY = "index";
-const fileKey = (id: string) => `file:${id}`;
 const AUDIO_EXTENSIONS = /\.(mp3|wav|ogg|oga|opus|m4a|aac|flac|webm|weba)$/i;
-
-let idbStore: UseStore | undefined;
-// Opened lazily so a disabled plugin never touches IndexedDB
-const db = () => idbStore ??= createIdbStore("SoundPanelData", "SoundPanelStore");
 
 export const libraryStore = createStore({ loaded: false, items: [] as LibraryItem[] });
 
 const fileUrls = new Map<string, string>();
 let loadPromise: Promise<void> | undefined;
 
+const setItems = (items: LibraryItem[]) => libraryStore.set({ loaded: true, items });
+
 export function loadLibrary() {
-    return loadPromise ??= get<LibraryItem[]>(INDEX_KEY, db())
-        .then(items => libraryStore.set({ loaded: true, items: items ?? [] }))
+    return loadPromise ??= storage.readIndex()
+        .then(migrateLegacyLibrary)
+        .then(setItems)
         .catch(err => {
             loadPromise = undefined;
             logger.error("Failed to load library", err);
         });
 }
 
-async function saveItems(items: LibraryItem[]) {
-    libraryStore.set({ items });
-    await set(INDEX_KEY, items, db());
+// Picks up changes made in another Discord app sharing the library
+export async function refreshLibrary() {
+    if (!libraryStore.get().loaded) return loadLibrary();
+
+    try {
+        setItems(await storage.readIndex());
+    } catch (err) {
+        logger.error("Failed to refresh library", err);
+    }
 }
 
 export function getItems(kind: LibraryKind) {
@@ -102,11 +95,11 @@ export async function addFiles(files: File[], kind: LibraryKind) {
             addedAt: Date.now()
         };
 
-        await set(fileKey(item.id), file, db());
+        await storage.writeFile(item.id, file);
         added.push(item);
     }
 
-    if (added.length) await saveItems([...libraryStore.get().items, ...added]);
+    if (added.length) setItems(await storage.changeIndex({ type: "add", items: added }));
 
     return { added: added.length, skipped: files.length - audioFiles.length };
 }
@@ -117,21 +110,22 @@ export async function addBlob(blob: Blob, name: string, kind: LibraryKind) {
     return addFiles([new File([blob], `${name}.${extension}`, { type })], kind);
 }
 
-export async function updateItem(id: string, patch: Partial<Pick<LibraryItem, "name" | "volume" | "kind">>) {
-    await saveItems(libraryStore.get().items.map(item => item.id === id ? { ...item, ...patch } : item));
+export async function updateItem(id: string, patch: LibraryPatch) {
+    setItems(await storage.changeIndex({ type: "update", id, patch }));
 }
 
 export async function removeItem(id: string) {
     revokeFileUrl(id);
-    await saveItems(libraryStore.get().items.filter(item => item.id !== id));
-    await del(fileKey(id), db());
+    setItems(await storage.changeIndex({ type: "remove", id }));
+    await storage.deleteFile(id);
 }
 
 export async function getFileUrl(id: string) {
     const cached = fileUrls.get(id);
     if (cached) return cached;
 
-    const blob = await get<Blob>(fileKey(id), db());
+    const item = libraryStore.get().items.find(i => i.id === id);
+    const blob = await storage.readFile(id, item?.mimeType ?? "");
     if (!blob) throw new Error("Audio file is missing from storage");
 
     const url = URL.createObjectURL(blob);

@@ -62,9 +62,15 @@ export const settings = definePluginSettings({
     },
     webrtcEngine: {
         type: OptionType.BOOLEAN,
-        description: "Use Discord's WebRTC voice engine on the desktop app. The native engine can't mix your own audio into the microphone, so this is required for others to hear it. Krisp and screen share audio may behave differently",
+        description: "Use Discord's WebRTC voice engine on the desktop app. The native engine can't mix your own audio into the microphone, so this is required for others to hear it. Screen sharing then uses SoundPanel's own screen picker",
         default: false,
         restartNeeded: true,
+        hidden: !IS_DISCORD_DESKTOP
+    },
+    maxVideoQuality: {
+        type: OptionType.BOOLEAN,
+        description: "With the WebRTC voice engine, send your camera at its best resolution and frame rate and your stream at exactly the quality you pick, at the highest bitrate Discord allows. Discord otherwise shrinks video to viewers' window sizes and lowers your camera's frame rate when you're quiet. Uses more upload bandwidth and CPU",
+        default: true,
         hidden: !IS_DISCORD_DESKTOP
     },
     activeTab: {

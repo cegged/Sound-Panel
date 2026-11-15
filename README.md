@@ -9,7 +9,7 @@ A Vencord plugin that adds an advanced sound panel to Discord's voice controls, 
 - **Music tab**: a playlist player with play/pause, previous/next, seek, shuffle, repeat (all / one / off) and its own volume.
 - **Footer mixer**: choose whether your audio goes to the voice channel or stays local, set the volume others hear and the volume you hear, stop everything, and see a live status that explains why others can't hear you when something is wrong.
 
-Your files are stored locally in IndexedDB and never uploaded anywhere.
+Your files never leave your computer. On the desktop app they're kept in Vencord's data folder (`%APPDATA%\Vencord\SoundPanel` on Windows), so Discord Stable, PTB and Canary share one library; sounds added before this are moved there automatically. In the browser they're kept in IndexedDB.
 
 ## How others hear your own sounds
 
@@ -18,7 +18,7 @@ Server soundboard sounds use Discord's own soundboard, so everyone hears them.
 Your uploaded sounds and music are mixed into your microphone stream. This only works when Discord uses its **WebRTC** voice engine:
 
 - **Browser / Vesktop**: works out of the box.
-- **Discord desktop app**: the default native voice engine captures the microphone outside of JavaScript, so enable **"Use Discord's WebRTC voice engine"** in the plugin settings and restart Discord. Krisp and screen share audio may behave differently with this engine.
+- **Discord desktop app**: the default native voice engine captures the microphone outside of JavaScript, so enable **"Use Discord's WebRTC voice engine"** in the plugin settings and restart Discord. In this mode SoundPanel also makes screen sharing work: Go Live opens SoundPanel's own screen/window picker, and shared audio leaves out Discord's own playback so people in the call don't hear themselves. Video is encoded with VP8, since the Chromium inside Discord's desktop app has no H264 encoder. With **"maximum video quality"** (on by default) your camera is sent at its best resolution and frame rate and your stream at exactly the quality you pick, at the highest bitrate Discord allows, instead of being shrunk to viewers' window sizes.
 
 Tips:
 - Turn off Krisp noise suppression for the best music quality, since it filters out non-voice audio.

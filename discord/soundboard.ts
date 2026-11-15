@@ -6,7 +6,6 @@
  */
 
 import { Logger } from "@utils/Logger";
-import type { PluginNative } from "@utils/types";
 import type { Channel, SoundboardSound } from "@vencord/discord-types";
 import { findByCodeLazy } from "@webpack";
 import {
@@ -24,6 +23,7 @@ import {
 
 import { mixerStore } from "../audio/mixer";
 import { settings } from "../settings";
+import { Native } from "../utils/native";
 
 const logger = new Logger("SoundPanel");
 
@@ -92,7 +92,6 @@ export function getSoundRoute(sound: SoundboardSound, channel: Channel | undefin
     return { kind: "local", reason: blocker ?? "Your microphone isn't carrying custom audio. Check the status at the bottom of the panel" };
 }
 
-const Native = VencordNative.pluginHelpers.SoundPanel as PluginNative<typeof import("../native")> | undefined;
 const soundBlobs = new Map<string, Promise<Blob>>();
 
 async function fetchSoundBlob(soundId: string) {

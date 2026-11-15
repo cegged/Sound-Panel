@@ -11,6 +11,7 @@ import { MediaEngineStore } from "@webpack/common";
 
 import { settings } from "../settings";
 import { createStore } from "../utils/store";
+import { upgradeCameraConstraints } from "../video/quality";
 
 // Audio graph:
 //   clip / music ─┬─> voiceBus ─┐
@@ -146,7 +147,8 @@ export function installMicrophoneHook() {
     const original = originalGetUserMedia = devices.getUserMedia;
 
     devices.getUserMedia = async function (constraints) {
-        const stream = await original.call(this, constraints);
+        const request = IS_DISCORD_DESKTOP && webrtcEngineActive ? upgradeCameraConstraints(constraints) : constraints;
+        const stream = await original.call(this, request);
         if (!constraints?.audio || constraints.video) return stream;
 
         try {

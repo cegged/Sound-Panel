@@ -639,6 +639,85 @@ img.vc-soundpanel-emoji {
     pointer-events: none;
 }
 
+/* ---------- Screen share picker ---------- */
+
+.vc-soundpanel-source-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.vc-soundpanel-source-tabs .vc-soundpanel-tab-button {
+    flex: none;
+    padding: 8px 14px 10px;
+}
+
+.vc-soundpanel-source-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 12px;
+    padding-bottom: 8px;
+}
+
+.vc-soundpanel-source {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+    padding: 8px;
+    border: 2px solid transparent;
+    border-radius: 10px;
+    background: var(--background-mod-subtle, var(--background-secondary));
+    color: var(--text-default);
+    text-align: left;
+    cursor: pointer;
+}
+
+.vc-soundpanel-source:hover {
+    background: var(--background-mod-normal, var(--background-modifier-hover));
+}
+
+.vc-soundpanel-source-selected {
+    border-color: var(--brand-500, #5865f2);
+}
+
+.vc-soundpanel-source-thumbnail {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border-radius: 6px;
+    background: var(--background-base-lowest, #000);
+    object-fit: contain;
+}
+
+.vc-soundpanel-source-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    font-size: 13px;
+}
+
+.vc-soundpanel-source-icon {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+}
+
+.vc-soundpanel-source-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.vc-soundpanel-share-audio {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-default);
+    font-size: 14px;
+}
+
 /* ---------- Footer ---------- */
 
 .vc-soundpanel-footer {

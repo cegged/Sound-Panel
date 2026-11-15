@@ -10,7 +10,7 @@ import type { Channel } from "@vencord/discord-types";
 import { useEffect } from "@webpack/common";
 import type { ComponentType } from "react";
 
-import { loadLibrary } from "../data/library";
+import { refreshLibrary } from "../data/library";
 import { PanelTab, settings } from "../settings";
 import { cl } from "./common";
 import { IconProps, MusicNoteIcon, ServerIcon, SoundPanelIcon, SpeakerIcon } from "./icons";
@@ -29,7 +29,7 @@ function SoundPanelPopout({ channel }: { channel?: Channel; }) {
     const activeTab = settings.use(["activeTab"]).activeTab as PanelTab;
 
     useEffect(() => {
-        void loadLibrary();
+        void refreshLibrary();
     }, []);
 
     return (
