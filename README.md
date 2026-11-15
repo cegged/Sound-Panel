@@ -21,6 +21,7 @@ A [Vencord](https://github.com/Vendicated/Vencord) plugin. It adds a button to y
 | <img src="images/icons/microphone.svg" width="28"> | **Through your mic** | Plays sounds Discord won't let you play here (no permission, or another server's sound without Nitro) through your microphone, so everyone in the call still hears them |
 | <img src="images/icons/sounds.svg" width="28"> | **My Sounds** | Your own sound effects. Add files, then rename them, set their volume or move them |
 | <img src="images/icons/music.svg" width="28"> | **Music** | A playlist with shuffle, repeat and seeking that plays into the call |
+| <img src="images/icons/link.svg" width="28"> | **YouTube links** | Paste a YouTube link to add the song to your music. Desktop app only |
 | <img src="images/icons/volume.svg" width="28"> | **Two volumes** | One volume for what others hear, another for what you hear |
 | <img src="images/icons/library.svg" width="28"> | **One library** | Discord Stable, PTB and Canary share the same sounds and music |
 | <img src="images/icons/screen.svg" width="28"> | **WebRTC mode** | On the desktop app, mixes your audio into your microphone and keeps screen sharing and the camera working at full quality |
@@ -74,6 +75,10 @@ Right-click a sound for more:
 Open **Music**, click **Add Music** or drop files, then click a track. You can shuffle, repeat the list or one track, seek and change the music volume.
 
 <img src="images/music.png" alt="Music tab" width="420">
+
+To add a song from YouTube, copy its link and paste it into the search box. The button next to it turns into **Add from YouTube**. Click it, and the plugin downloads the song into your music and plays it. The first time, it also downloads the two tools it needs, about 24 MB.
+
+<img src="images/youtube-link.png" alt="A YouTube link pasted into the Music tab" width="420">
 
 ## Letting others hear your own sounds
 
@@ -181,6 +186,26 @@ Hover the sound to see why. Most of the time you're not in a voice channel, or y
 <br>
 
 On your computer only. The desktop app keeps them in `%APPDATA%\Vencord\SoundPanel` on Windows, shared by Stable, PTB and Canary. In a browser they stay in that browser's storage.
+
+</details>
+
+<details>
+<summary><b>How do YouTube links work?</b></summary>
+<br>
+
+The plugin downloads the song's audio with [yt-dlp](https://github.com/yt-dlp/yt-dlp), which needs the JavaScript engine [QuickJS-NG](https://github.com/quickjs-ng/quickjs) to get past YouTube's checks. The first time you add a link, the plugin downloads both from their official GitHub releases, checks them against their published checksums and keeps them in `%APPDATA%\Vencord\SoundPanel\tools`. When YouTube changes something and downloads stop working, the plugin updates yt-dlp and tries again.
+
+You can add songs up to an hour long and 100 MB. Discord in a browser can't run these tools, so YouTube links need the desktop app.
+
+YouTube's terms only allow downloads where YouTube shows its own download button, and the songs you play to others may be copyrighted. What you play is up to you.
+
+</details>
+
+<details>
+<summary><b>A YouTube link doesn't work</b></summary>
+<br>
+
+Read the message the panel shows. YouTube sometimes asks you to prove you're not a bot, and some videos are private or blocked in your country. Some antivirus programs also mistake yt-dlp for a threat; allow it if you trust it.
 
 </details>
 

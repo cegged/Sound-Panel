@@ -5,7 +5,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { useState } from "@webpack/common";
+import { LinkIcon } from "@components/Icons";
+import { showToast, useEffect, useState } from "@webpack/common";
 import type { CSSProperties } from "react";
 
 import {
@@ -17,9 +18,10 @@ import {
     toggleMusic,
     toggleShuffle
 } from "../audio/player";
-import { LibraryItem, updateItem, useLibrary } from "../data/library";
+import { addFromYouTube, isYouTubeLink, LibraryItem, updateItem, useLibrary, useYouTubeStatus, type YouTubeStatus } from "../data/library";
 import { settings } from "../settings";
 import { showError } from "../utils/logger";
+import { Native } from "../utils/native";
 import { useStore } from "../utils/store";
 import { cl, EmptyState, FileDropZone, formatTime, matchesQuery, RangeSlider, RenameInput, SearchBox, UploadButton } from "./common";
 import {
@@ -169,29 +171,67 @@ function TrackRow({ track, index, active, playing, editing, setEditing }: {
     );
 }
 
+const YOUTUBE_LABELS: Record<YouTubeStatus, string> = {
+    idle: "Add from YouTube",
+    preparing: "Getting ready...",
+    downloading: "Downloading..."
+};
+
 export function MusicTab() {
     const { loaded, items: tracks } = useLibrary("music");
     const currentId = useStore(musicStore, s => s.currentId);
     const playing = useStore(musicStore, s => s.playing);
+    const youTubeStatus = useYouTubeStatus();
     const [query, setQuery] = useState("");
     const [editingId, setEditingId] = useState<string | null>(null);
 
-    const visible = tracks.filter(track => matchesQuery(track.name, query));
+    // A pasted link isn't a search, so the whole playlist stays visible
+    const pastedLink = isYouTubeLink(query);
+    const visible = pastedLink ? tracks : tracks.filter(track => matchesQuery(track.name, query));
+
+    useEffect(() => {
+        if (youTubeStatus === "preparing") showToast({ text: "Getting YouTube links ready. This happens once and downloads about 24 MB" });
+    }, [youTubeStatus]);
+
+    const addPastedLink = () => {
+        const link = query;
+        addFromYouTube(link).then(
+            track => {
+                setQuery(current => current === link ? "" : current);
+                showToast({ text: `Added "${track.name}" to Music`, variant: "success" });
+                run(() => playTrack(track.id));
+            },
+            err => showError(`Couldn't add it from YouTube: ${err.message}`, err)
+        );
+    };
 
     return (
         <FileDropZone kind="music">
             <div className={cl("tab")}>
                 <NowPlaying tracks={tracks} />
-                <div className={cl("toolbar")}>
-                    <SearchBox value={query} onChange={setQuery} placeholder="Search your music" />
-                    <UploadButton kind="music" label="Add Music" />
-                </div>
+                <form
+                    className={cl("toolbar")}
+                    onSubmit={e => {
+                        e.preventDefault();
+                        if (pastedLink && youTubeStatus === "idle") addPastedLink();
+                    }}
+                >
+                    <SearchBox value={query} onChange={setQuery} placeholder={Native ? "Search or paste a YouTube link" : "Search your music"} />
+                    {pastedLink || youTubeStatus !== "idle" ? (
+                        <button type="submit" className={cl("action-button", "primary")} disabled={youTubeStatus !== "idle"}>
+                            <LinkIcon width={16} height={16} />
+                            <span>{YOUTUBE_LABELS[youTubeStatus]}</span>
+                        </button>
+                    ) : (
+                        <UploadButton kind="music" label="Add Music" />
+                    )}
+                </form>
                 <div className={cl("scroller")}>
                     {!loaded ? (
                         <EmptyState icon={<MusicNoteIcon size={28} />} title="Loading your music..." />
                     ) : tracks.length === 0 ? (
                         <EmptyState icon={<MusicNoteIcon size={28} />} title="Your playlist is empty">
-                            Click <b>Add Music</b> or drop audio files here. Right-click a track for more options.
+                            Click <b>Add Music</b>, drop audio files here{Native && " or paste a YouTube link above"}. Right-click a track for more options.
                         </EmptyState>
                     ) : visible.length === 0 ? (
                         <EmptyState icon={<MusicNoteIcon size={28} />} title="No tracks match your search" />

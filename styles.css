@@ -273,16 +273,21 @@
     transition: background-color 0.15s ease;
 }
 
+.vc-soundpanel-action-button:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
 .vc-soundpanel-primary {
     background: var(--control-primary-background-default, var(--brand-500));
     color: var(--control-primary-text-default, #fff);
 }
 
-.vc-soundpanel-primary:hover {
+.vc-soundpanel-primary:hover:not(:disabled) {
     background: var(--control-primary-background-hover, var(--brand-560));
 }
 
-.vc-soundpanel-primary:active {
+.vc-soundpanel-primary:active:not(:disabled) {
     background: var(--control-primary-background-active, var(--brand-560));
 }
 

@@ -8,15 +8,21 @@
 import { useMemo } from "@webpack/common";
 
 import { logger } from "../utils/logger";
+import { Native } from "../utils/native";
 import { createStore, useStore } from "../utils/store";
 import type { LibraryItem, LibraryKind, LibraryPatch } from "./libraryIndex";
 import { migrateLegacyLibrary, storage } from "./storage";
 
 export type { LibraryItem, LibraryKind } from "./libraryIndex";
+export type YouTubeStatus = "idle" | "preparing" | "downloading";
 
 const AUDIO_EXTENSIONS = /\.(mp3|wav|ogg|oga|opus|m4a|aac|flac|webm|weba)$/i;
+// A loose check for the panel; the main process checks the link properly
+const YOUTUBE_LINK = /^(https?:\/\/)?((www|m|music)\.)?(youtube\.com\/(watch\?|shorts\/|live\/)|youtu\.be\/)\S+$/i;
 
 const libraryStore = createStore({ loaded: false, items: [] as LibraryItem[] });
+// Outside the panel, so closing and reopening it keeps showing a download that's still running
+const youTubeStore = createStore({ status: "idle" as YouTubeStatus });
 const fileUrls = new Map<string, string>();
 let loadPromise: Promise<void> | undefined;
 
@@ -96,6 +102,38 @@ export async function addFiles(files: File[], kind: LibraryKind) {
     if (added.length) setItems(await storage.changeIndex({ type: "add", items: added }));
 
     return { added: added.length, skipped: files.length - audioFiles.length };
+}
+
+export const isYouTubeLink = (text: string) => !!Native && YOUTUBE_LINK.test(text.trim());
+export const useYouTubeStatus = () => useStore(youTubeStore, s => s.status);
+
+// Errors from the main process arrive as "Error invoking remote method '...': Error: <reason>"
+const nativeReason = (err: unknown) => String((err as Error)?.message ?? err).replace(/^Error invoking remote method '[^']+': (\w*Error: )?/, "");
+
+export async function addFromYouTube(link: string) {
+    if (!Native) throw new Error("YouTube links need the Discord desktop app");
+    if (youTubeStore.get().status !== "idle") throw new Error("Another YouTube link is still downloading");
+
+    try {
+        await loadLibrary();
+
+        // yt-dlp and its JavaScript runtime are downloaded the first time only
+        if (!await Native.hasYouTubeTools()) {
+            youTubeStore.set({ status: "preparing" });
+            await Native.prepareYouTubeTools();
+        }
+
+        youTubeStore.set({ status: "downloading" });
+        const { id, name, mimeType, size, duration } = await Native.downloadYouTubeAudio(link);
+        const item: LibraryItem = { id, name, kind: "music", mimeType, size, duration, volume: 1, addedAt: Date.now() };
+
+        setItems(await storage.changeIndex({ type: "add", items: [item] }));
+        return item;
+    } catch (err) {
+        throw new Error(nativeReason(err), { cause: err });
+    } finally {
+        youTubeStore.set({ status: "idle" });
+    }
 }
 
 export function addBlob(blob: Blob, name: string, kind: LibraryKind) {
