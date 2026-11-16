@@ -6,7 +6,8 @@
  */
 
 import type { Channel, SoundboardSound } from "@vencord/discord-types";
-import { ContextMenuApi, GuildStore, Menu, showToast, SoundboardStore, Tooltip, useEffect, useState } from "@webpack/common";
+import { ContextMenuApi, GuildStore, Menu, React, showToast, SoundboardStore, Tooltip, useEffect, useState, useStateFromStores } from "@webpack/common";
+import type { ComponentType } from "react";
 
 import { isSoundboardJoinSound, setJoinSound } from "../audio/joinSound";
 import { clipStore, playClip, stopClip } from "../audio/player";
@@ -15,6 +16,7 @@ import {
     clipKey,
     downloadSoundboardSound,
     getEmojiUrl,
+    getSoundContext,
     getSoundGroups,
     getSoundRoute,
     getSoundUrl,
@@ -23,7 +25,6 @@ import {
     playServerSound,
     playThroughMicrophone,
     setSoundboardFavorite,
-    type SoundContext,
     type SoundGroup,
     type SoundRoute,
     useSoundContext
@@ -75,9 +76,10 @@ function SoundEmoji({ sound }: { sound: SoundboardSound; }) {
     return sound.emojiName ? <span className={cl("emoji")}>{sound.emojiName}</span> : <SpeakerIcon className={cl("emoji")} size={18} />;
 }
 
-function ServerSoundMenu({ sound, ctx, route }: { sound: SoundboardSound; ctx: SoundContext; route: SoundRoute; }) {
+function ServerSoundMenu({ sound, channel, route }: { sound: SoundboardSound; channel: Channel | undefined; route: SoundRoute; }) {
     const { joinSound } = settings.use(["joinSound"]);
     const glass = useGlassMenu();
+    const ctx = getSoundContext(channel);
     const isJoinSound = isSoundboardJoinSound(joinSound, sound.soundId);
     const favorite = SoundboardStore.isFavoriteSound(sound.soundId);
 
@@ -133,12 +135,31 @@ function ServerSoundMenu({ sound, ctx, route }: { sound: SoundboardSound; ctx: S
     );
 }
 
-function ServerSoundTile({ sound, ctx, playing, joinSound }: { sound: SoundboardSound; ctx: SoundContext; playing: boolean; joinSound: boolean; }) {
-    const route = getSoundRoute(sound, ctx);
+const routeReason = (route: SoundRoute) => route.kind === "soundboard" ? undefined : route.reason;
+
+function toRoute(kind: SoundRoute["kind"], reason: string | undefined): SoundRoute {
+    if (kind === "soundboard") return { kind };
+    if (kind === "microphone") return { kind, reason };
+    return { kind, reason: reason ?? "" };
+}
+
+interface TileProps {
+    sound: SoundboardSound;
+    channel: Channel | undefined;
+    routeKind: SoundRoute["kind"];
+    routeReason: string | undefined;
+    showRoute: boolean;
+    playing: boolean;
+    joinSound: boolean;
+}
+
+function ServerSoundTile({ sound, channel, routeKind, routeReason, showRoute, playing, joinSound }: TileProps) {
+    const playingInCall = useStateFromStores([SoundboardStore], () => SoundboardStore.isPlayingSound(sound.soundId));
+    const route = toRoute(routeKind, routeReason);
 
     const onClick = () => {
         if (playing && !settings.store.allowOverlap) stopClip(clipKey(sound));
-        else playSound(sound, ctx.channel, route);
+        else playSound(sound, channel, route);
     };
 
     return (
@@ -150,19 +171,34 @@ function ServerSoundTile({ sound, ctx, playing, joinSound }: { sound: Soundboard
                     className={cl("tile", {
                         "tile-local": route.kind === "local",
                         "tile-discord": route.kind === "soundboard",
-                        "tile-playing": playing || SoundboardStore.isPlayingSound(sound.soundId)
+                        "tile-playing": playing || playingInCall
                     })}
                     onClick={onClick}
-                    onContextMenu={e => ContextMenuApi.openContextMenu(e, () => <ServerSoundMenu sound={sound} ctx={ctx} route={route} />)}
+                    onContextMenu={e => ContextMenuApi.openContextMenu(e, () => <ServerSoundMenu sound={sound} channel={channel} route={route} />)}
                 >
                     <SoundEmoji sound={sound} />
                     <span className={cl("tile-name")}>{sound.name}</span>
                     {joinSound && <JoinSoundIcon className={cl("tile-badge", "tile-badge-join")} size={14} />}
-                    {route.kind === "microphone" && <MicIcon className={cl("tile-badge")} size={14} />}
-                    {route.kind === "local" && <HeadphonesIcon className={cl("tile-badge")} size={14} />}
+                    {showRoute && route.kind === "microphone" && <MicIcon className={cl("tile-badge")} size={14} />}
+                    {showRoute && route.kind === "local" && <HeadphonesIcon className={cl("tile-badge")} size={14} />}
                 </button>
             )}
         </Tooltip>
+    );
+}
+
+let MemoizedTile: ComponentType<TileProps> | undefined;
+const getTile = () => MemoizedTile ??= React.memo(ServerSoundTile);
+
+function RouteBadge({ route }: { route: Exclude<SoundRoute, { kind: "soundboard"; }>; }) {
+    const text = route.kind === "microphone"
+        ? `These play through your microphone${route.reason ? `: ${route.reason}` : ""}`
+        : `Only you will hear these: ${route.reason}`;
+
+    return (
+        <span className={cl("group-route")} title={text} aria-label={text}>
+            {route.kind === "microphone" ? <MicIcon size={14} /> : <HeadphonesIcon size={14} />}
+        </span>
     );
 }
 
@@ -196,6 +232,7 @@ export function ServerSoundsTab({ channel }: { channel?: Channel; }) {
         .filter(group => group.sounds.length);
 
     const loading = SoundboardStore.isFetchingSounds() || !SoundboardStore.hasFetchedAllSounds();
+    const Tile = getTile();
 
     return (
         <div className={cl("tab")}>
@@ -213,23 +250,31 @@ export function ServerSoundsTab({ channel }: { channel?: Channel; }) {
                     />
                 ) : groups.map(group => {
                     const isCollapsed = collapsed.has(group.id) && !query;
+                    const routes = group.sounds.map(sound => getSoundRoute(sound, ctx));
+                    const [first] = routes;
+                    const shared = group.id !== "favorites" && routes.every(route => route.kind === first.kind && routeReason(route) === routeReason(first));
+                    const headerRoute = shared && first.kind !== "soundboard" ? first : null;
 
                     return (
                         <section key={group.id} className={cl("group")}>
                             <GroupHeader
                                 icon={<GroupIcon group={group} />}
                                 name={group.name}
+                                badge={headerRoute && <RouteBadge route={headerRoute} />}
                                 count={group.sounds.length}
                                 collapsed={isCollapsed}
                                 onToggle={() => toggleGroup(group.id)}
                             />
                             {!isCollapsed && (
                                 <div className={cl("grid")}>
-                                    {group.sounds.map(sound => (
-                                        <ServerSoundTile
+                                    {group.sounds.map((sound, i) => (
+                                        <Tile
                                             key={`${group.id}-${sound.soundId}`}
                                             sound={sound}
-                                            ctx={ctx}
+                                            channel={channel}
+                                            routeKind={routes[i].kind}
+                                            routeReason={routeReason(routes[i])}
+                                            showRoute={!headerRoute}
                                             playing={playing.includes(clipKey(sound))}
                                             joinSound={isSoundboardJoinSound(joinSound, sound.soundId)}
                                         />

@@ -46,7 +46,7 @@ import {
     ShuffleIcon,
     SpeakerIcon
 } from "./icons";
-import { openLibraryItemMenu } from "./LibraryItemMenu";
+import { openLibraryItemMenu, openPendingSongMenu } from "./LibraryItemMenu";
 import { YouTubeCard } from "./YouTubeCard";
 
 function run(action: () => Promise<unknown>) {
@@ -76,29 +76,26 @@ function Cover({ track, className, iconSize }: { track: { id: string; cover?: bo
     );
 }
 
-function NowPlaying({ tracks, pending }: { tracks: LibraryItem[]; pending: PendingSong[]; }) {
+function NowPlaying({ tracks }: { tracks: LibraryItem[]; }) {
     const currentId = useStore(musicStore, s => s.currentId);
     const playing = useStore(musicStore, s => s.playing);
     const { repeatMode, shuffle, musicVolume } = settings.use(["repeatMode", "shuffle", "musicVolume"]);
     const track = tracks.find(t => t.id === currentId);
-    const song = track ? undefined : pending.find(s => s.id === currentId);
-    const current = track ?? song;
 
     return (
         <section className={cl("now-playing")}>
             <div className={cl("now-playing-info")}>
-                <Cover track={current} className={cl("now-playing-art", { "art-playing": playing })} iconSize={22} />
+                <Cover track={track} className={cl("now-playing-art", { "art-playing": playing })} iconSize={22} />
                 <div className={cl("now-playing-text")}>
-                    <div className={cl("now-playing-title")}>{current?.name ?? "Nothing playing"}</div>
+                    <div className={cl("now-playing-title")}>{track?.name ?? "Nothing playing"}</div>
                     <div className={cl("now-playing-subtitle")}>
                         {track ? [track.artist, `${tracks.indexOf(track) + 1} of ${tracks.length}`].filter(Boolean).join(" · ")
-                            : song ? [song.artist, downloadLabel(song)].filter(Boolean).join(" · ")
-                                : `${tracks.length} track${tracks.length === 1 ? "" : "s"} in your library`}
+                            : `${tracks.length} track${tracks.length === 1 ? "" : "s"} in your library`}
                     </div>
                 </div>
             </div>
 
-            <SeekBar fallbackDuration={current?.duration ?? 0} />
+            <SeekBar fallbackDuration={track?.duration ?? 0} />
 
             <div className={cl("controls")}>
                 <div className={cl("transport")}>
@@ -119,7 +116,7 @@ function NowPlaying({ tracks, pending }: { tracks: LibraryItem[]; pending: Pendi
                         type="button"
                         className={cl("play-button")}
                         aria-label={playing ? "Pause" : "Play"}
-                        disabled={!tracks.length && !song}
+                        disabled={!tracks.length}
                         onClick={() => run(toggleMusic)}
                     >
                         {playing ? <PauseIcon size={18} /> : <PlayIcon size={18} />}
@@ -188,26 +185,27 @@ function TrackRow({ track, active, playing, editing, setEditing }: {
     );
 }
 
-function PendingRow({ song, active, playing }: { song: PendingSong; active: boolean; playing: boolean; }) {
-    const onClick = () => active ? run(toggleMusic) : playPendingSong(song.id);
+function PendingRow({ song }: { song: PendingSong; }) {
+    const onClick = () => playPendingSong(song.id);
     const percent = song.progress === null ? null : Math.round(song.progress * 100);
 
     return (
         <div
             role="button"
             tabIndex={0}
-            className={cl("track", "track-pending", { "track-active": active })}
-            style={{ "--vc-soundpanel-progress": `${percent ?? 0}%` } as CSSProperties}
+            className={cl("track", "track-pending")}
+            style={{ "--vc-soundpanel-progress": `${percent ?? 0}%`, "--vc-soundpanel-percent": percent ?? 0 } as CSSProperties}
             title={downloadLabel(song)}
             onClick={onClick}
             onKeyDown={e => (e.key === "Enter" || e.key === " ") && onClick()}
+            onContextMenu={e => openPendingSongMenu(e, song)}
         >
-            <Cover track={song} className={cl("track-cover", { "art-playing": active && playing })} iconSize={14} />
+            <Cover track={song} className={cl("track-cover")} iconSize={14} />
             <span className={cl("track-text")}>
                 <span className={cl("track-name")}>{song.name}</span>
                 {song.artist && <span className={cl("track-artist")}>{song.artist}</span>}
             </span>
-            <span className={cl("track-duration")}>{percent === null ? "..." : `${percent}%`}</span>
+            <span className={cl("track-duration", { "track-percent": percent !== null })}>{percent === null && "..."}</span>
         </div>
     );
 }
@@ -256,7 +254,7 @@ export function MusicTab() {
     return (
         <FileDropZone kind="music">
             <div className={cl("tab")}>
-                <NowPlaying tracks={tracks} pending={pending} />
+                <NowPlaying tracks={tracks} />
                 <form className={cl("youtube-form")} onSubmit={e => e.preventDefault()}>
                     <div className={cl("toolbar")}>
                         <SearchBox
@@ -289,7 +287,7 @@ export function MusicTab() {
                     ) : (
                         <div className={cl("track-list")}>
                             {visiblePending.map(song => (
-                                <PendingRow key={song.id} song={song} active={song.id === currentId} playing={playing} />
+                                <PendingRow key={song.id} song={song} />
                             ))}
                             {visible.map(track => (
                                 <TrackRow

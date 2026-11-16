@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { getFileUrl, getItems, LibraryItem } from "../data/library";
+import { getFileUrl, getItems, LibraryItem, releaseFileUrl } from "../data/library";
 import { RepeatMode, settings } from "../settings";
 import { logger } from "../utils/logger";
 import { createStore, useStore } from "../utils/store";
@@ -31,11 +31,6 @@ export const musicStore = createStore({
 let musicAudio: HTMLAudioElement | null = null;
 let musicSource: MediaElementAudioSourceNode | null = null;
 let musicGain: GainNode | null = null;
-let stream: { id: string; stopped: boolean; } | null = null;
-
-type ReadAudio = (offset: number) => Promise<{ bytes: Uint8Array<ArrayBuffer> | null; done: boolean; }>;
-
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 function updatePlaybackActive() {
     setPlaybackActive([...clips].some(clip => !clip.localOnly) || musicStore.get().playing);
@@ -151,100 +146,22 @@ export function applyMusicVolume() {
 export async function playTrack(id: string) {
     const audio = getMusicElement();
     const url = await getFileUrl(id);
-    stopStream();
     audio.src = url;
-    musicStore.set({ currentId: id, position: 0, duration: 0 });
+    switchTrack(id);
     applyMusicVolume();
     await audio.play();
 }
 
-function stopStream() {
-    if (stream) stream.stopped = true;
-    stream = null;
-}
-
-function whenUpdated(buffer: SourceBuffer) {
-    return new Promise<void>((resolve, reject) => {
-        const done = () => {
-            buffer.removeEventListener("error", failed);
-            resolve();
-        };
-        const failed = () => {
-            buffer.removeEventListener("updateend", done);
-            reject(new Error("The audio couldn't be decoded"));
-        };
-        buffer.addEventListener("updateend", done, { once: true });
-        buffer.addEventListener("error", failed, { once: true });
-    });
-}
-
-async function appendAudio(session: { stopped: boolean; }, audio: HTMLAudioElement, buffer: SourceBuffer, bytes: Uint8Array<ArrayBuffer>) {
-    while (!session.stopped) {
-        try {
-            buffer.appendBuffer(bytes);
-            return await whenUpdated(buffer);
-        } catch (err) {
-            if ((err as DOMException)?.name !== "QuotaExceededError") throw err;
-
-            const playedUntil = audio.currentTime - 10;
-            if (buffer.buffered.length && buffer.buffered.start(0) < playedUntil) {
-                buffer.remove(0, playedUntil);
-                await whenUpdated(buffer);
-            } else {
-                await sleep(1000);
-            }
-        }
-    }
-}
-
-async function feedStream(session: { stopped: boolean; }, audio: HTMLAudioElement, source: MediaSource, buffer: SourceBuffer, read: ReadAudio) {
-    let offset = 0;
-
-    while (!session.stopped && source.readyState === "open") {
-        const { bytes, done } = await read(offset);
-        if (session.stopped || source.readyState !== "open") return;
-
-        if (bytes?.length) {
-            await appendAudio(session, audio, buffer, bytes);
-            offset += bytes.length;
-        }
-        if (done) {
-            if (source.readyState === "open" && !buffer.updating) source.endOfStream();
-            return;
-        }
-        if (!bytes?.length) await sleep(250);
-    }
-}
-
-export async function playStream(id: string, type: string, read: ReadAudio) {
-    const audio = getMusicElement();
-    stopStream();
-    const session = stream = { id, stopped: false };
-
-    const source = new MediaSource();
-    const url = URL.createObjectURL(source);
-    audio.src = url;
+function switchTrack(id: string) {
+    const previous = musicStore.get().currentId;
     musicStore.set({ currentId: id, position: 0, duration: 0 });
-    applyMusicVolume();
-
-    await new Promise(resolve => source.addEventListener("sourceopen", resolve, { once: true }));
-    URL.revokeObjectURL(url);
-    if (session.stopped) return;
-
-    const buffer = source.addSourceBuffer(type);
-    feedStream(session, audio, source, buffer, read).catch(err => logger.error(`Failed to stream ${id}`, err));
-
-    await audio.play().catch(err => {
-        if ((err as DOMException)?.name !== "AbortError") throw err;
-    });
+    if (previous && previous !== id) releaseFileUrl(previous);
 }
 
 export async function toggleMusic() {
     const audio = getMusicElement();
-    const { currentId } = musicStore.get();
-    const hasTrack = currentId !== null && (stream?.id === currentId || getCurrentTrack() !== undefined);
 
-    if (!hasTrack) {
+    if (!getCurrentTrack()) {
         const [first] = getItems("music");
         if (first) await playTrack(first.id);
     } else if (audio.paused) {
@@ -314,7 +231,6 @@ function stopMusic() {
 export function releaseTrack(id: string) {
     if (!musicAudio || musicStore.get().currentId !== id) return;
 
-    if (stream?.id === id) stopStream();
     musicAudio.pause();
     musicAudio.removeAttribute("src");
     musicAudio.load();
@@ -339,7 +255,6 @@ export function stopAll() {
 
 export function disposePlayer() {
     stopClips();
-    stopStream();
 
     if (musicAudio) {
         musicAudio.pause();

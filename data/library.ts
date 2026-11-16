@@ -23,7 +23,7 @@ export interface PendingSong {
     cover: boolean;
     duration: number;
     progress: number | null;
-    streamType: string | null;
+    queued: boolean;
 }
 
 const AUDIO_EXTENSIONS = /\.(mp3|wav|ogg|oga|opus|m4a|aac|flac|webm|weba)$/i;
@@ -121,7 +121,9 @@ export async function addFiles(files: File[], kind: LibraryKind) {
 }
 
 export const downloadLabel = (song: PendingSong) =>
-    song.progress === null ? "Loading from YouTube" : `Downloading ${Math.round(song.progress * 100)}%`;
+    song.queued ? "Waiting for another download"
+        : song.progress === null ? "Loading from YouTube"
+            : `Downloading ${Math.round(song.progress * 100)}%`;
 export const usePendingSongs = () => useStore(pendingStore, s => s.songs);
 export const useYouTubePreparing = () => useStore(pendingStore, s => s.preparing);
 export const getPendingSong = (id: string) => pendingStore.get().songs.find(song => song.id === id);
@@ -214,6 +216,8 @@ export async function getFileUrl(id: string) {
     fileUrls.set(id, url);
     return url;
 }
+
+export const releaseFileUrl = (id: string) => revokeUrl(fileUrls, id);
 
 function revokeUrl(urls: Map<string, string>, id: string) {
     const url = urls.get(id);

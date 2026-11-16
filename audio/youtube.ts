@@ -22,7 +22,7 @@ import {
 import { showError } from "../utils/logger";
 import { Native } from "../utils/native";
 import { youTubeVideoId } from "../utils/youtube";
-import { musicStore, playStream, playTrack, releaseTrack } from "./player";
+import { musicStore, playTrack } from "./player";
 
 export type YouTubePreview = Awaited<ReturnType<NonNullable<typeof Native>["getYouTubePreview"]>>;
 
@@ -44,7 +44,7 @@ export function loadYouTubePreview(videoId: string) {
 }
 
 const POLL_INTERVAL = 400;
-const STREAM_CHUNK = 1024 * 1024;
+const FULL_BAR_PAUSE = 800;
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const starting = new Set<string>();
@@ -58,38 +58,35 @@ function claimPlayRequest(id: string) {
     return stillWanted;
 }
 
-function streamSong(song: PendingSong) {
-    const native = Native!;
-    let saved: Uint8Array<ArrayBuffer> | null | undefined;
-
-    playStream(song.id, song.streamType!, async offset => {
-        const state = saved === undefined ? await native.getYouTubeDownload(song.id, offset) : null;
-        if (!state) {
-            saved ??= await native.readLibraryFile(song.id);
-            const bytes = saved?.subarray(offset, offset + STREAM_CHUNK) ?? null;
-            return { bytes, done: !saved || offset + (bytes?.length ?? 0) >= saved.length };
-        }
-        if (state.error) throw new Error(state.error);
-
-        return { bytes: state.bytes, done: !!state.item && offset + (state.bytes?.length ?? 0) >= state.item.size };
-    }).catch(err => showError(`Couldn't play "${song.name}"`, err));
+function requestPlay(id: string) {
+    playRequest = { id, currentId: musicStore.get().currentId };
 }
 
 export function playPendingSong(id: string) {
-    const song = getPendingSong(id);
-    if (!song) return;
+    if (!getPendingSong(id)) return;
 
-    if (song.streamType) {
-        playRequest = null;
-        streamSong(song);
-    } else {
-        playRequest = { id, currentId: musicStore.get().currentId };
+    requestPlay(id);
+    showToast({ text: "It plays as soon as it's downloaded" });
+}
+
+export async function cancelPendingSong(id: string) {
+    const song = getPendingSong(id);
+    if (!song || song.progress === 1) return;
+
+    if (playRequest?.id === id) playRequest = null;
+    removePendingSong(id);
+    try {
+        await Native!.cancelYouTubeDownload(id);
+        showToast({ text: `Cancelled "${song.name}"` });
+    } catch (err) {
+        showError(`Couldn't cancel "${song.name}"`, err);
+    } finally {
+        void Native!.finishYouTubeDownload(id);
     }
 }
 
 function giveUp(id: string, reason: string) {
     if (playRequest?.id === id) playRequest = null;
-    releaseTrack(id);
     removePendingSong(id);
     void Native!.finishYouTubeDownload(id);
     showError(`Couldn't add it from YouTube: ${reason}`, new Error(reason));
@@ -100,34 +97,33 @@ async function followDownload(id: string) {
 
     for (;;) {
         await sleep(POLL_INTERVAL);
+        if (!getPendingSong(id)) return;
 
         let state: Awaited<ReturnType<typeof native.getYouTubeDownload>>;
         try {
-            state = await native.getYouTubeDownload(id, -1);
+            state = await native.getYouTubeDownload(id);
         } catch (err) {
             return giveUp(id, nativeReason(err));
         }
-        if (!state) return giveUp(id, "The download stopped");
-        if (state.error) return giveUp(id, state.error);
 
         const song = getPendingSong(id);
         if (!song) return;
+        if (!state) return giveUp(id, "The download stopped");
+        if (state.error) return giveUp(id, state.error);
 
-        const updated: PendingSong = {
+        setPendingSong({
             ...song,
             name: state.title || song.name,
             artist: state.channel || song.artist,
             cover: state.cover,
             duration: state.duration || song.duration,
             progress: state.progress,
-            streamType: state.streamType && MediaSource.isTypeSupported(state.streamType) ? state.streamType : null
-        };
-        setPendingSong(updated);
-
-        if (updated.streamType && claimPlayRequest(id)) streamSong(updated);
+            queued: state.queued
+        });
 
         const { item } = state;
         if (item) {
+            await sleep(FULL_BAR_PAUSE);
             await refreshLibrary();
             removePendingSong(id);
             void native.finishYouTubeDownload(id);
@@ -170,10 +166,10 @@ export async function playFromYouTube(link: string): Promise<YouTubeResult> {
             cover: false,
             duration: 0,
             progress: null,
-            streamType: null
+            queued: false
         };
         setPendingSong(song);
-        playPendingSong(id);
+        requestPlay(id);
         void followDownload(id);
 
         return { song };

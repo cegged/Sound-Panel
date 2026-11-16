@@ -15,6 +15,7 @@ import { usesDesktopWebRTC } from "../webrtc/engine";
 import { upgradeCameraConstraints } from "../webrtc/quality";
 
 export const MAX_VOICE_VOLUME = 150;
+export const MAX_MICROPHONE_BOOST = 12;
 
 export const mixerStore = createStore({ activeMixes: 0 });
 
@@ -23,6 +24,9 @@ let voiceBus: GainNode;
 let localBus: GainNode;
 let originalGetUserMedia: MediaDevices["getUserMedia"] | null = null;
 let forcingInput = false;
+const microphoneBoosts = new Set<GainNode>();
+
+const microphoneGain = () => 10 ** (Math.min(Math.max(settings.store.microphoneBoost, 0), MAX_MICROPHONE_BOOST) / 20);
 
 export const isSelfMuted = () => MediaEngineStore.isSelfMute() || MediaEngineStore.isSelfDeaf();
 
@@ -34,6 +38,19 @@ function createLimiter(ctx: AudioContext) {
     limiter.attack.value = 0.002;
     limiter.release.value = 0.15;
     return limiter;
+}
+
+function createClipGuard(ctx: AudioContext) {
+    const curve = new Float32Array(4097);
+    for (let i = 0; i < curve.length; i++) {
+        const x = i / 2048 - 1;
+        const level = Math.abs(x);
+        curve[i] = Math.sign(x) * (level <= 0.95 ? level : 0.95 + 0.045 * Math.tanh((level - 0.95) / 0.045));
+    }
+
+    const guard = ctx.createWaveShaper();
+    guard.curve = curve;
+    return guard;
 }
 
 export function getAudioContext() {
@@ -61,6 +78,7 @@ export function connectToOutputs(node: AudioNode) {
 }
 
 export function applyVolumes() {
+    for (const boost of microphoneBoosts) boost.gain.value = microphoneGain();
     if (!context) return;
 
     const { transmit, voiceVolume, localVolume } = settings.store;
@@ -73,7 +91,8 @@ export async function routeToOutputDevice(target: AudioContext | HTMLMediaElemen
 
     try {
         await (target as { setSinkId?(id: string): Promise<void>; }).setSinkId?.(!deviceId || deviceId === "default" ? "" : deviceId);
-    } catch { }
+    } catch {
+    }
 }
 
 export function applyOutputDevice() {
@@ -90,11 +109,17 @@ async function mixWithMicrophone(microphone: MediaStream) {
     }
 
     const source = ctx.createMediaStreamSource(microphone);
+    const boost = ctx.createGain();
+    boost.gain.value = microphoneGain();
     const limiter = createLimiter(ctx);
+    const guard = createClipGuard(ctx);
     const destination = ctx.createMediaStreamDestination();
-    source.connect(limiter);
+    source.connect(boost);
+    boost.connect(limiter);
     voiceBus.connect(limiter);
-    limiter.connect(destination);
+    limiter.connect(guard);
+    guard.connect(destination);
+    microphoneBoosts.add(boost);
 
     const [track] = destination.stream.getAudioTracks();
     const stopTrack = track.stop.bind(track);
@@ -107,8 +132,11 @@ async function mixWithMicrophone(microphone: MediaStream) {
         stopped = true;
         microphone.getTracks().forEach(t => t.stop());
         source.disconnect();
+        boost.disconnect();
+        microphoneBoosts.delete(boost);
         voiceBus.disconnect(limiter);
         limiter.disconnect();
+        guard.disconnect();
         mixerStore.set({ activeMixes: mixerStore.get().activeMixes - 1 });
     };
 

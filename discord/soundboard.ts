@@ -80,14 +80,14 @@ export function useSoundContext(channel: Channel | undefined): SoundContext {
     return { channel, muted, canUseSoundboard, canUseExternalSounds, hasNitro, micReady: transmit && mixing, preferMicrophone: serverSoundsThroughMic };
 }
 
-export function getSoundContext(channel: Channel): SoundContext {
+export function getSoundContext(channel: Channel | undefined): SoundContext {
     const { transmit, serverSoundsThroughMic } = settings.store;
 
     return {
         channel,
         muted: isSelfMuted(),
-        canUseSoundboard: !channel.guild_id || PermissionStore.can(USE_SOUNDBOARD, channel),
-        canUseExternalSounds: !channel.guild_id || PermissionStore.can(USE_EXTERNAL_SOUNDS, channel),
+        canUseSoundboard: !channel?.guild_id || PermissionStore.can(USE_SOUNDBOARD, channel),
+        canUseExternalSounds: !channel?.guild_id || PermissionStore.can(USE_EXTERNAL_SOUNDS, channel),
         hasNitro: !!UserStore.getCurrentUser()?.premiumType,
         micReady: transmit && mixerStore.get().activeMixes > 0,
         preferMicrophone: serverSoundsThroughMic

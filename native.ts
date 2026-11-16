@@ -6,14 +6,14 @@
  */
 
 import { DATA_DIR } from "@main/utils/constants";
-import { execFile, spawn } from "child_process";
+import { type ChildProcess, execFile, spawn } from "child_process";
 import { createHash, randomUUID } from "crypto";
 import { desktopCapturer, IpcMainInvokeEvent, Session } from "electron";
-import { access, mkdir, open, readFile, rename, rm, stat, writeFile } from "fs/promises";
+import { access, mkdir, readFile, rename, rm, stat, writeFile } from "fs/promises";
 import { basename, dirname, join, resolve } from "path";
 
-import { applyIndexChange, type IndexChange, type LibraryItem } from "./data/libraryIndex";
-import { youTubeVideoId } from "./utils/youtube";
+import { applyIndexChange, type IndexChange, type LibraryItem, type LibraryKind, type LibraryPatch } from "./data/libraryIndex";
+import { isVideoId, youTubeVideoId } from "./utils/youtube";
 
 export interface ScreenSource {
     id: string;
@@ -52,7 +52,8 @@ const toolBuild: ToolBuild | undefined = TOOL_BUILDS[`${process.platform}-${proc
 const AUDIO_TYPES: Record<string, string> = { m4a: "audio/mp4", webm: "audio/webm", opus: "audio/ogg", ogg: "audio/ogg", mp3: "audio/mpeg" };
 
 let indexQueue: Promise<unknown> = Promise.resolve();
-let pendingSource: { id: string; audio: boolean; } | null = null;
+let pendingSource: { id: string; audio: boolean; at: number; } | null = null;
+const SCREEN_PICK_TTL = 10_000;
 const sessionsWithHandler = new WeakSet<Session>();
 let toolsReady: Promise<void> | undefined;
 let ytDlpUpdated = false;
@@ -61,18 +62,42 @@ let jsRuntime: Promise<string> | undefined;
 interface YouTubeDownload {
     videoId: string;
     folder: string;
-    path?: string;
     preview?: { title: string; channel?: string; };
-    details?: { title?: string; channel?: string; duration?: number; ext?: string; acodec?: string; };
+    details?: { title?: string; channel?: string; duration?: number; };
     coverSaved: Promise<boolean>;
     cover: boolean;
-    progress: number | null;
+    startedAt?: number;
+    foundAt?: number;
+    bar?: BarCourse;
+    queued: boolean;
     item?: LibraryItem;
     error?: string;
+    finishedAt?: number;
+    cancelled?: boolean;
+    stop?(): void;
+}
+
+interface BarCourse {
+    since: number;
+    from: number;
+    until: number;
+    to: number;
+    limit: number;
 }
 
 const youTubeDownloads = new Map<string, YouTubeDownload>();
-const MAX_CHUNK = 1024 * 1024;
+const MAX_DOWNLOADS = 3;
+let runningDownloads = 0;
+const waitingDownloads: (() => void)[] = [];
+const FORGET_AFTER = 10 * 60 * 1000;
+
+let lookupTime: number | undefined;
+const FETCH_TIME = 800;
+const SAVE_TIME = 500;
+const LOOKUP_TO = 0.8;
+const LOOKUP_LIMIT = 0.92;
+const AUDIO_TO = 0.97;
+const BAR_END = 0.99;
 
 function checkId(id: string) {
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) throw new Error("Invalid library file id");
@@ -107,8 +132,52 @@ export function readLibraryIndex(_: IpcMainInvokeEvent) {
     return readIndexFile();
 }
 
-export function changeLibraryIndex(_: IpcMainInvokeEvent, change: IndexChange) {
-    return changeIndex(change);
+export async function changeLibraryIndex(_: IpcMainInvokeEvent, change: IndexChange) {
+    return changeIndex(cleanChange(change));
+}
+
+const isFiniteNumber = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
+const isKind = (kind: unknown): kind is LibraryKind => kind === "sound" || kind === "music";
+const clampVolume = (volume: number) => Math.min(Math.max(volume, 0), 2);
+
+function cleanItem(raw: Partial<LibraryItem> | null | undefined): LibraryItem {
+    if (!raw || typeof raw !== "object" || typeof raw.name !== "string" || !isKind(raw.kind)) throw new Error("Invalid library item");
+    const { id, name, kind, mimeType, size, duration, volume, addedAt, artist, youtubeId, cover, favorite } = raw;
+
+    return {
+        id: checkId(id as string),
+        name: name.slice(0, 200),
+        kind,
+        mimeType: typeof mimeType === "string" ? mimeType.slice(0, 100) : "",
+        size: isFiniteNumber(size) ? size : 0,
+        duration: isFiniteNumber(duration) ? duration : 0,
+        volume: isFiniteNumber(volume) ? clampVolume(volume) : 1,
+        addedAt: isFiniteNumber(addedAt) ? addedAt : Date.now(),
+        ...typeof artist === "string" && { artist: artist.slice(0, 200) },
+        ...isVideoId(youtubeId) && { youtubeId },
+        ...cover === true && { cover },
+        ...favorite === true && { favorite }
+    };
+}
+
+function cleanChange(change: IndexChange): IndexChange {
+    switch (change?.type) {
+        case "add":
+            if (Array.isArray(change.items)) return { type: "add", items: change.items.map(cleanItem) };
+            break;
+        case "update": {
+            const { name, volume, kind, favorite } = change.patch ?? {};
+            const patch: LibraryPatch = {};
+            if (typeof name === "string") patch.name = name.slice(0, 200);
+            if (isFiniteNumber(volume)) patch.volume = clampVolume(volume);
+            if (isKind(kind)) patch.kind = kind;
+            if (typeof favorite === "boolean") patch.favorite = favorite;
+            return { type: "update", id: checkId(change.id), patch };
+        }
+        case "remove":
+            return { type: "remove", id: checkId(change.id) };
+    }
+    throw new Error("Invalid library change");
 }
 
 function changeIndex(change: IndexChange) {
@@ -127,6 +196,7 @@ function changeIndex(change: IndexChange) {
 }
 
 export async function writeLibraryFile(_: IpcMainInvokeEvent, id: string, data: Uint8Array) {
+    if (!(data instanceof Uint8Array)) throw new Error("Invalid file data");
     await mkdir(FILES_DIR, { recursive: true });
     await writeFile(libraryFilePath(id), data);
 }
@@ -172,7 +242,8 @@ export async function getScreenSources(_: IpcMainInvokeEvent): Promise<ScreenSou
 }
 
 export function selectScreenSource(event: IpcMainInvokeEvent, id: string, audio: boolean) {
-    pendingSource = { id, audio };
+    if (typeof id !== "string" || !/^(screen|window):[\w:-]+$/.test(id)) throw new Error("Invalid screen source");
+    pendingSource = { id, audio: audio === true, at: Date.now() };
 
     const { session } = event.sender;
     if (sessionsWithHandler.has(session)) return;
@@ -182,7 +253,7 @@ export function selectScreenSource(event: IpcMainInvokeEvent, id: string, audio:
         const choice = pendingSource;
         pendingSource = null;
 
-        if (!choice) return callback({});
+        if (!choice || Date.now() - choice.at > SCREEN_PICK_TTL) return callback({});
 
         desktopCapturer.getSources({ types: CAPTURE_TYPES })
             .then(sources => {
@@ -258,12 +329,19 @@ function ytDlpError(stderr: string) {
     return line?.replace(/^ERROR:\s*(\[[^\]]+\]\s*[\w-]+:\s*)?/, "");
 }
 
-function runYtDlp(path: string, args: string[], onLine?: (line: string) => void) {
+interface RunOptions {
+    onLine?(line: string): void;
+    onSpawn?(child: ChildProcess): void;
+    cancelled?(): boolean;
+}
+
+function runYtDlp(path: string, args: string[], { onLine, onSpawn }: RunOptions = {}) {
     return new Promise<string>((done, fail) => {
         const child = spawn(path, args, {
             windowsHide: true,
             env: { ...process.env, PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" }
         });
+        onSpawn?.(child);
         const timeout = setTimeout(() => child.kill(), 5 * 60 * 1000);
         let stdout = "";
         let stderr = "";
@@ -289,16 +367,69 @@ function runYtDlp(path: string, args: string[], onLine?: (line: string) => void)
     });
 }
 
-async function runYtDlpUpToDate(path: string, args: string[], onLine?: (line: string) => void) {
+async function runYtDlpUpToDate(path: string, args: string[], options: RunOptions = {}) {
     try {
-        return await runYtDlp(path, args, onLine);
+        return await runYtDlp(path, args, options);
     } catch (err) {
-        if (ytDlpUpdated) throw err;
+        if (ytDlpUpdated || options.cancelled?.()) throw err;
 
         ytDlpUpdated = true;
         await runYtDlp(path, ["--update"]).catch(() => { });
-        return runYtDlp(path, args, onLine);
+        if (options.cancelled?.()) throw err;
+        return runYtDlp(path, args, options);
     }
+}
+
+function takeDownloadTurn(download: YouTubeDownload) {
+    if (runningDownloads < MAX_DOWNLOADS) {
+        runningDownloads++;
+        return Promise.resolve();
+    }
+
+    download.queued = true;
+    return new Promise<void>(resolve => waitingDownloads.push(() => {
+        download.queued = false;
+        resolve();
+    }));
+}
+
+function giveBackDownloadTurn() {
+    const next = waitingDownloads.shift();
+    if (next) next();
+    else runningDownloads--;
+}
+
+function stopIfCancelled(download: YouTubeDownload) {
+    if (download.cancelled) throw new Error("Cancelled");
+}
+
+function barAt({ since, from, until, to, limit }: BarCourse, now: number) {
+    const span = Math.max(until - since, 1);
+    if (now <= until) return from + (to - from) * (now - since) / span;
+
+    const late = now - until;
+    return to + (limit - to) * late / (late + span);
+}
+
+function aimBar(download: YouTubeDownload, until: number, to: number, limit: number) {
+    const now = Date.now();
+    const from = download.bar ? barAt(download.bar, now) : 0;
+    const end = Math.max(limit, from);
+    download.bar = { since: now, from, until: Math.max(until, now + 1), to: Math.max(to, from + (end - from) / 2), limit: end };
+}
+
+function progressOf(download: YouTubeDownload) {
+    if (download.item) return 1;
+    return download.bar ? barAt(download.bar, Date.now()) : null;
+}
+
+function markFound(download: YouTubeDownload) {
+    if (download.startedAt === undefined || download.foundAt !== undefined) return;
+
+    const now = download.foundAt = Date.now();
+    const took = now - download.startedAt;
+    lookupTime = ((lookupTime ?? took) + took) / 2;
+    aimBar(download, now + FETCH_TIME, AUDIO_TO, BAR_END);
 }
 
 const thumbnailUrl = (videoId: string) => `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
@@ -354,28 +485,6 @@ export async function getYouTubePreview(_: IpcMainInvokeEvent, link: string) {
     return { videoId, video, thumbnail };
 }
 
-async function readChunk(path: string, offset: number) {
-    let handle: Awaited<ReturnType<typeof open>>;
-    try {
-        handle = await open(path, "r");
-    } catch (err) {
-        if (isMissing(err)) return null;
-        throw err;
-    }
-
-    try {
-        const { size } = await handle.stat();
-        const length = Math.min(size - offset, MAX_CHUNK);
-        if (length <= 0) return null;
-
-        const bytes = new Uint8Array(length);
-        const { bytesRead } = await handle.read(bytes, 0, length, offset);
-        return bytes.subarray(0, bytesRead);
-    } finally {
-        await handle.close();
-    }
-}
-
 function parseLine<T>(line: string): T | undefined {
     try {
         return JSON.parse(line);
@@ -385,8 +494,14 @@ function parseLine<T>(line: string): T | undefined {
 }
 
 async function runYouTubeDownload(id: string, download: YouTubeDownload) {
+    await takeDownloadTurn(download);
     try {
+        stopIfCancelled(download);
         const { ytDlp, quickJs } = getTools();
+        const runtime = await getJsRuntime(quickJs);
+        download.startedAt = Date.now();
+        lookupTime ??= runtime === "node" ? 4000 : 7500;
+        aimBar(download, download.startedAt + lookupTime, LOOKUP_TO, LOOKUP_LIMIT);
         await mkdir(download.folder, { recursive: true });
 
         const output = await runYtDlpUpToDate(ytDlp, [
@@ -394,27 +509,33 @@ async function runYouTubeDownload(id: string, download: YouTubeDownload) {
             "--no-playlist",
             "--cache-dir", join(TOOLS_DIR, "cache"),
             "--no-js-runtimes",
-            "--js-runtimes", await getJsRuntime(quickJs),
+            "--js-runtimes", runtime,
             "--format", "bestaudio[acodec=opus]/bestaudio[ext=m4a][audio_channels<=2]/bestaudio[audio_channels<=2]/bestaudio",
             "--max-filesize", "100M",
             "--match-filters", "duration <= 3600",
             "--output", join(download.folder, "audio.%(ext)s"),
-            "--no-part",
             "--progress",
             "--newline",
-            "--progress-template", "download:progress %(progress.downloaded_bytes)s %(progress.total_bytes,progress.total_bytes_estimate)s",
-            "--print", "before_dl:%(.{title,channel,duration,ext,acodec})j",
+            "--progress-template", "download:progress %(progress.downloaded_bytes)s %(progress.eta)s",
+            "--print", "before_dl:%(.{title,channel,duration})j",
             "--print", "after_move:%(.{title,channel,duration,ext,filepath})j",
             "--", `https://www.youtube.com/watch?v=${download.videoId}`
-        ], line => {
-            const progress = /^progress (\d+) (\d+)/.exec(line);
-            if (progress) {
-                download.progress = Math.min(Number(progress[1]) / Number(progress[2]), 1);
-            } else if (line.startsWith("{") && !line.includes("\"filepath\"")) {
-                download.details = parseLine(line);
-                if (download.details?.ext) download.path = join(download.folder, `audio.${download.details.ext}`);
-            }
+        ], {
+            onLine(line) {
+                const progress = /^progress (\d+) (\d+)/.exec(line);
+                if (progress) {
+                    if (Number(progress[1]) > 0) aimBar(download, Date.now() + Number(progress[2]) * 1000 + SAVE_TIME, AUDIO_TO, BAR_END);
+                } else if (line.startsWith("{") && !line.includes("\"filepath\"")) {
+                    download.details = parseLine(line);
+                    markFound(download);
+                }
+            },
+            onSpawn(child) {
+                download.stop = () => child.kill();
+            },
+            cancelled: () => !!download.cancelled
         });
+        stopIfCancelled(download);
 
         const line = output.trim().split(/\r?\n/).filter(l => l.startsWith("{") && l.includes("\"filepath\"")).pop();
         const info = line && parseLine<{ title?: string; channel?: string; duration?: number; ext?: string; filepath?: string; }>(line);
@@ -423,7 +544,6 @@ async function runYouTubeDownload(id: string, download: YouTubeDownload) {
 
         await mkdir(FILES_DIR, { recursive: true });
         await rename(info.filepath, libraryFilePath(id));
-        download.path = libraryFilePath(id);
 
         const item: LibraryItem = {
             id,
@@ -439,16 +559,26 @@ async function runYouTubeDownload(id: string, download: YouTubeDownload) {
             cover: await download.coverSaved
         };
 
+        stopIfCancelled(download);
         await changeIndex({ type: "add", items: [item] });
         download.item = item;
-        download.progress = 1;
     } catch (err) {
-        download.error = err instanceof Error ? err.message : String(err);
+        download.error = download.cancelled ? "Cancelled" : err instanceof Error ? err.message : String(err);
 
         await download.coverSaved;
         await Promise.all([rm(libraryFilePath(id), { force: true }), rm(coverFilePath(id), { force: true })]).catch(() => { });
     } finally {
+        download.stop = undefined;
+        download.finishedAt = Date.now();
+        giveBackDownloadTurn();
         await rm(download.folder, { recursive: true, force: true }).catch(() => { });
+    }
+}
+
+function forgetOldDownloads() {
+    const now = Date.now();
+    for (const [id, download] of youTubeDownloads) {
+        if (download.finishedAt && now - download.finishedAt > FORGET_AFTER) youTubeDownloads.delete(id);
     }
 }
 
@@ -456,8 +586,10 @@ export async function startYouTubeDownload(_: IpcMainInvokeEvent, link: string) 
     const videoId = youTubeVideoId(link);
     if (!videoId) throw new Error("That isn't a link to a YouTube video");
 
+    forgetOldDownloads();
+
     for (const [id, running] of youTubeDownloads) {
-        if (running.videoId === videoId && !running.item && !running.error) return id;
+        if (running.videoId === videoId && !running.item && !running.error && !running.cancelled) return id;
     }
 
     await prepareTools();
@@ -468,7 +600,7 @@ export async function startYouTubeDownload(_: IpcMainInvokeEvent, link: string) 
         folder: join(DOWNLOADS_DIR, id),
         coverSaved: saveCover(videoId, id),
         cover: false,
-        progress: null
+        queued: false
     };
     youTubeDownloads.set(id, download);
 
@@ -481,7 +613,7 @@ export async function startYouTubeDownload(_: IpcMainInvokeEvent, link: string) 
     return id;
 }
 
-export async function getYouTubeDownload(_: IpcMainInvokeEvent, id: string, offset: number) {
+export function getYouTubeDownload(_: IpcMainInvokeEvent, id: string) {
     const download = youTubeDownloads.get(checkId(id));
     if (!download) return null;
 
@@ -490,13 +622,20 @@ export async function getYouTubeDownload(_: IpcMainInvokeEvent, id: string, offs
         title: details?.title || preview?.title,
         channel: details?.channel || preview?.channel,
         duration: details?.duration ?? 0,
-        streamType: details?.ext === "webm" ? `audio/webm; codecs="${details.acodec ?? "opus"}"` : null,
         cover: download.cover,
-        progress: download.progress,
-        bytes: offset >= 0 && download.path ? await readChunk(download.path, offset) : null,
+        progress: progressOf(download),
+        queued: download.queued,
         item: download.item ?? null,
         error: download.error ?? null
     };
+}
+
+export function cancelYouTubeDownload(_: IpcMainInvokeEvent, id: string) {
+    const download = youTubeDownloads.get(checkId(id));
+    if (!download || download.item || download.error) return;
+
+    download.cancelled = true;
+    download.stop?.();
 }
 
 export function finishYouTubeDownload(_: IpcMainInvokeEvent, id: string) {

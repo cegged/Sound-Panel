@@ -669,6 +669,12 @@
     white-space: nowrap;
 }
 
+.vc-soundpanel-group-route {
+    display: flex;
+    flex-shrink: 0;
+    color: var(--vc-soundpanel-secondary);
+}
+
 .vc-soundpanel-group-count {
     font-weight: 500;
     font-variant-numeric: tabular-nums;
@@ -980,8 +986,29 @@
     font-variant-numeric: tabular-nums;
 }
 
+@property --vc-soundpanel-progress {
+    syntax: "<percentage>";
+    inherits: true;
+    initial-value: 0%;
+}
+
+@property --vc-soundpanel-percent {
+    syntax: "<integer>";
+    inherits: true;
+    initial-value: 0;
+}
+
 .vc-soundpanel-track-pending {
     position: relative;
+    transition:
+        background-color 0.15s ease,
+        --vc-soundpanel-progress 0.4s linear,
+        --vc-soundpanel-percent 0.4s linear;
+}
+
+.vc-soundpanel-track-percent::after {
+    counter-reset: vc-soundpanel-percent var(--vc-soundpanel-percent);
+    content: counter(vc-soundpanel-percent) "%";
 }
 
 .vc-soundpanel-track-pending::after {

@@ -102,6 +102,11 @@ export function SearchBox({ value, placeholder, onChange }: { value: string; pla
                 placeholder={placeholder}
                 spellCheck={false}
                 onChange={e => onChange(e.currentTarget.value)}
+                onKeyDown={e => {
+                    if (e.key !== "Escape" || !value) return;
+                    e.stopPropagation();
+                    onChange("");
+                }}
             />
         </label>
     );
@@ -170,9 +175,10 @@ export function useCollapsedGroups() {
     return [collapsed, toggle] as const;
 }
 
-export function GroupHeader({ icon, name, count, collapsed, onToggle }: {
+export function GroupHeader({ icon, name, badge, count, collapsed, onToggle }: {
     icon: ReactNode;
     name: string;
+    badge?: ReactNode;
     count: number;
     collapsed: boolean;
     onToggle(): void;
@@ -181,6 +187,7 @@ export function GroupHeader({ icon, name, count, collapsed, onToggle }: {
         <button type="button" className={cl("group-header")} onClick={onToggle} aria-expanded={!collapsed}>
             {icon}
             <span className={cl("group-name")}>{name}</span>
+            {badge}
             <span className={cl("group-count")}>{count}</span>
             <span className={cl("chevron", { "chevron-collapsed": collapsed })}><DownArrow width={16} height={16} /></span>
         </button>

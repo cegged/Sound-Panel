@@ -11,9 +11,11 @@ import { ContextMenuApi, Menu } from "@webpack/common";
 
 import { isLibraryJoinSound, setJoinSound } from "../audio/joinSound";
 import { applyMusicVolume, playLibrarySound, playTrack, releaseTrack, stopClip } from "../audio/player";
-import { LibraryItem, removeItem, updateItem } from "../data/library";
+import { cancelPendingSong } from "../audio/youtube";
+import { LibraryItem, type PendingSong, removeItem, updateItem } from "../data/library";
 import { settings } from "../settings";
 import { showError } from "../utils/logger";
+import { isVideoId } from "../utils/youtube";
 import { useGlassMenu } from "./common";
 import { HeadphonesIcon, JoinSoundIcon, MusicNoteIcon, PlayIcon, StarIcon, WaveformIcon } from "./icons";
 
@@ -54,7 +56,7 @@ function LibraryItemMenu({ item, onRename }: { item: LibraryItem; onRename(): vo
                     action={() => play(true)}
                 />
             )}
-            {item.youtubeId && (
+            {isVideoId(item.youtubeId) && (
                 <Menu.MenuItem
                     id="vc-soundpanel-open-youtube"
                     label="Open on YouTube"
@@ -128,4 +130,24 @@ function LibraryItemMenu({ item, onRename }: { item: LibraryItem; onRename(): vo
 
 export function openLibraryItemMenu(event: React.MouseEvent, item: LibraryItem, onRename: () => void) {
     ContextMenuApi.openContextMenu(event, () => <LibraryItemMenu item={item} onRename={onRename} />);
+}
+
+function PendingSongMenu({ song }: { song: PendingSong; }) {
+    const glass = useGlassMenu();
+
+    return (
+        <Menu.Menu navId="vc-soundpanel-pending" onClose={ContextMenuApi.closeContextMenu} aria-label={song.name} {...glass}>
+            <Menu.MenuItem
+                id="vc-soundpanel-cancel-download"
+                label="Cancel Download"
+                color="danger"
+                icon={DeleteIcon}
+                action={() => void cancelPendingSong(song.id)}
+            />
+        </Menu.Menu>
+    );
+}
+
+export function openPendingSongMenu(event: React.MouseEvent, song: PendingSong) {
+    ContextMenuApi.openContextMenu(event, () => <PendingSongMenu song={song} />);
 }

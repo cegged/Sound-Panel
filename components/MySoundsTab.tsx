@@ -133,7 +133,7 @@ export function MySoundsTab() {
                         <EmptyState icon={<WaveformIcon size={28} />} title="Loading your sounds..." />
                     ) : items.length === 0 ? (
                         <EmptyState icon={<WaveformIcon size={28} />} title="No sounds yet">
-                            Click <b>Add</b> or drop audio files here. Right-click a sound to rename it, change its volume or delete it.
+                            Click <b>Add</b> or drop audio files here. Right-click a sound to add it to your favorites, make it your join sound, rename it or change its volume.
                         </EmptyState>
                     ) : visible.length === 0 ? (
                         <EmptyState icon={<WaveformIcon size={28} />} title="No sounds match your search" />

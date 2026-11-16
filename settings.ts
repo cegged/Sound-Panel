@@ -53,6 +53,14 @@ export const settings = definePluginSettings({
         stickToMarkers: false,
         onChange: applyMusicVolume
     },
+    microphoneBoost: {
+        type: OptionType.SLIDER,
+        description: "Raise your own voice by up to 12 dB if others hear you quieter than everyone else. Your sounds and music stay as they are, and loud words don't distort. Works wherever the plugin mixes into your microphone: the browser, Vesktop, and the desktop app with the WebRTC engine",
+        markers: [0, 3, 6, 9, 12],
+        default: 0,
+        stickToMarkers: false,
+        onChange: applyVolumes
+    },
     serverSoundsThroughMic: {
         type: OptionType.BOOLEAN,
         description: "Play server sounds through your microphone even where Discord's soundboard is allowed",
