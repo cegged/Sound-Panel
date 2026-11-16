@@ -9,10 +9,13 @@ import { DeleteIcon, OpenExternalIcon, PencilIcon } from "@components/Icons";
 import { debounce } from "@shared/debounce";
 import { ContextMenuApi, Menu } from "@webpack/common";
 
+import { isLibraryJoinSound, setJoinSound } from "../audio/joinSound";
 import { applyMusicVolume, playLibrarySound, playTrack, releaseTrack, stopClip } from "../audio/player";
 import { LibraryItem, removeItem, updateItem } from "../data/library";
+import { settings } from "../settings";
 import { showError } from "../utils/logger";
-import { HeadphonesIcon, MusicNoteIcon, PlayIcon, WaveformIcon } from "./icons";
+import { useGlassMenu } from "./common";
+import { HeadphonesIcon, JoinSoundIcon, MusicNoteIcon, PlayIcon, StarIcon, WaveformIcon } from "./icons";
 
 const setVolume = debounce((item: LibraryItem, volume: number) => {
     updateItem(item.id, { volume: volume / 100 })
@@ -21,7 +24,11 @@ const setVolume = debounce((item: LibraryItem, volume: number) => {
 }, 150);
 
 function LibraryItemMenu({ item, onRename }: { item: LibraryItem; onRename(): void; }) {
+    const { joinSound } = settings.use(["joinSound"]);
+    const glass = useGlassMenu();
     const isSound = item.kind === "sound";
+    // A join sound moved to Music can still be removed from here
+    const isJoinSound = isLibraryJoinSound(joinSound, item.id);
     const moveTarget = isSound ? "music" : "sound";
 
     const play = (localOnly?: boolean) => (isSound ? playLibrarySound(item, localOnly) : playTrack(item.id))
@@ -33,7 +40,7 @@ function LibraryItemMenu({ item, onRename }: { item: LibraryItem; onRename(): vo
     };
 
     return (
-        <Menu.Menu navId="vc-soundpanel-item" onClose={ContextMenuApi.closeContextMenu} aria-label={item.name}>
+        <Menu.Menu navId="vc-soundpanel-item" onClose={ContextMenuApi.closeContextMenu} aria-label={item.name} {...glass}>
             <Menu.MenuItem
                 id="vc-soundpanel-play"
                 label={isSound ? "Play" : "Play Track"}
@@ -54,6 +61,23 @@ function LibraryItemMenu({ item, onRename }: { item: LibraryItem; onRename(): vo
                     label="Open on YouTube"
                     icon={OpenExternalIcon}
                     action={() => VencordNative.native.openExternal(`https://www.youtube.com/watch?v=${item.youtubeId}`)}
+                />
+            )}
+            {(isSound || isJoinSound) && <Menu.MenuSeparator />}
+            {isSound && (
+                <Menu.MenuItem
+                    id="vc-soundpanel-favorite"
+                    label={item.favorite ? "Remove from Favorites" : "Add to Favorites"}
+                    icon={StarIcon}
+                    action={() => updateItem(item.id, { favorite: !item.favorite }).catch(err => showError(`Couldn't change "${item.name}"`, err))}
+                />
+            )}
+            {(isSound || isJoinSound) && (
+                <Menu.MenuItem
+                    id="vc-soundpanel-join-sound"
+                    label={isJoinSound ? "Remove Join Sound" : "Set as Join Sound"}
+                    icon={JoinSoundIcon}
+                    action={() => setJoinSound(isJoinSound ? null : { type: "library", id: item.id }, item.name)}
                 />
             )}
             <Menu.MenuSeparator />
@@ -95,6 +119,8 @@ function LibraryItemMenu({ item, onRename }: { item: LibraryItem; onRename(): vo
                 icon={DeleteIcon}
                 action={() => {
                     release();
+                    // Nothing would be left to play when you join a channel
+                    if (isJoinSound) settings.store.joinSound = null;
                     removeItem(item.id).catch(err => showError(`Couldn't delete "${item.name}"`, err));
                 }}
             />

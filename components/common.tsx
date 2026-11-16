@@ -5,17 +5,28 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { PlusIcon, SearchIcon } from "@components/Icons";
+import { DownArrow, PlusIcon, SearchIcon } from "@components/Icons";
 import { classNameFactory } from "@utils/css";
 import { classes } from "@utils/misc";
 import { showToast, useState } from "@webpack/common";
 import type { CSSProperties, ReactNode } from "react";
 
 import { addFiles, LibraryKind } from "../data/library";
+import { glassOpacity, settings } from "../settings";
 import { showError } from "../utils/logger";
 import { UploadIcon } from "./icons";
 
 export const cl = classNameFactory("vc-soundpanel-");
+
+// The panel's menus wear its glass, though Discord draws them outside the panel
+export function useGlassMenu() {
+    const { transparency } = settings.use(["transparency"]);
+
+    return {
+        className: cl("menu", { solid: transparency === 0 }),
+        style: { "--vc-soundpanel-opacity": glassOpacity(transparency) } as CSSProperties
+    };
+}
 
 async function importFiles(files: File[], kind: LibraryKind) {
     if (!files.length) return;
@@ -82,15 +93,7 @@ export function FileDropZone({ kind, children }: { kind: LibraryKind; children: 
     );
 }
 
-interface SearchBoxProps {
-    value: string;
-    placeholder: string;
-    onChange(value: string): void;
-    // Returns true when it handled the pasted text, which then stays out of the box
-    onPaste?(text: string): boolean;
-}
-
-export function SearchBox({ value, placeholder, onChange, onPaste }: SearchBoxProps) {
+export function SearchBox({ value, placeholder, onChange }: { value: string; placeholder: string; onChange(value: string): void; }) {
     return (
         <label className={cl("search")}>
             <SearchIcon width={16} height={16} />
@@ -100,9 +103,6 @@ export function SearchBox({ value, placeholder, onChange, onPaste }: SearchBoxPr
                 placeholder={placeholder}
                 spellCheck={false}
                 onChange={e => onChange(e.currentTarget.value)}
-                onPaste={e => {
-                    if (onPaste?.(e.clipboardData.getData("text"))) e.preventDefault();
-                }}
             />
         </label>
     );
@@ -156,6 +156,37 @@ export function RenameInput({ initialValue, onDone }: { initialValue: string; on
                 else if (e.key === "Escape") onDone(null);
             }}
         />
+    );
+}
+
+// Which sections are folded away, by id
+export function useCollapsedGroups() {
+    const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+
+    const toggle = (id: string) => setCollapsed(prev => {
+        const next = new Set(prev);
+        if (!next.delete(id)) next.add(id);
+        return next;
+    });
+
+    return [collapsed, toggle] as const;
+}
+
+// A section's heading, which also folds the section away
+export function GroupHeader({ icon, name, count, collapsed, onToggle }: {
+    icon: ReactNode;
+    name: string;
+    count: number;
+    collapsed: boolean;
+    onToggle(): void;
+}) {
+    return (
+        <button type="button" className={cl("group-header")} onClick={onToggle} aria-expanded={!collapsed}>
+            {icon}
+            <span className={cl("group-name")}>{name}</span>
+            <span className={cl("group-count")}>{count}</span>
+            <span className={cl("chevron", { "chevron-collapsed": collapsed })}><DownArrow width={16} height={16} /></span>
+        </button>
     );
 }
 

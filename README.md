@@ -19,9 +19,10 @@ A [Vencord](https://github.com/Vendicated/Vencord) plugin. It adds a button to y
 |:---:|---|---|
 | <img src="images/icons/soundboard.svg" width="28"> | **Soundboard** | Every soundboard sound you can use, grouped by server, with your favorites and a search |
 | <img src="images/icons/microphone.svg" width="28"> | **Through your mic** | Plays sounds Discord won't let you play here (no permission, or another server's sound without Nitro) through your microphone, so everyone in the call still hears them |
-| <img src="images/icons/sounds.svg" width="28"> | **My Sounds** | Your own sound effects. Add files, then rename them, set their volume or move them |
-| <img src="images/icons/music.svg" width="28"> | **Music** | A playlist with shuffle, repeat and seeking that plays into the call |
-| <img src="images/icons/link.svg" width="28"> | **YouTube links** | Paste a YouTube link to add the song to your music. Desktop app only |
+| <img src="images/icons/sounds.svg" width="28"> | **My Sounds** | Your own sound effects, with your favorites on top. Add files, then rename them, set their volume or move them |
+| <img src="images/icons/join.svg" width="28"> | **Join sound** | A sound of your choice plays when you join a voice channel, also without Nitro |
+| <img src="images/icons/music.svg" width="28"> | **Music** | A playlist, newest first, with shuffle, repeat and seeking that plays into the call |
+| <img src="images/icons/link.svg" width="28"> | **YouTube links** | Paste a YouTube link to see the video, then download it into your music. It plays while it downloads. Desktop app only |
 | <img src="images/icons/volume.svg" width="28"> | **Two volumes** | One volume for what others hear, another for what you hear |
 | <img src="images/icons/library.svg" width="28"> | **One library** | Discord Stable, PTB and Canary share the same sounds and music |
 | <img src="images/icons/screen.svg" width="28"> | **WebRTC mode** | On the desktop app, mixes your audio into your microphone and keeps screen sharing and the camera working at full quality |
@@ -50,11 +51,11 @@ The **Soundboard** tab has your favorites first, then each server, then Discord'
 | Green ring | It's playing, and the call hears it |
 | Gray ring | It's playing, but only you hear it |
 
-Right-click a sound to choose how it plays, to preview it only for yourself, or to save it to **My Sounds** or **Music**.
+Right-click a sound to choose how it plays, preview it only for yourself, add it to your favorites, make it your [join sound](#5-set-a-join-sound) or save it to **My Sounds** or **Music**. These favorites are the same as in Discord's own soundboard.
 
 ### 3. Add your own sounds
 
-Open **My Sounds**, click **Add** or drop audio files onto the panel, then click a sound to play it.
+Open **My Sounds**, click **Add** or drop audio files onto the panel, then click a sound to play it. Your newest sounds come first, and your favorites sit above them.
 
 <img src="images/my-sounds.png" alt="My Sounds tab" width="420">
 
@@ -66,6 +67,8 @@ Right-click a sound for more:
 |---|---|
 | **Play** | Plays it into the call |
 | **Play Only For Me** | Plays it only on your speakers |
+| **Add to Favorites** | Moves it to the favorites at the top |
+| **Set as Join Sound** | Plays it when you join a voice channel |
 | **Volume** | Makes this sound louder or quieter, up to 200% |
 | **Rename** | Changes its name |
 | **Move to Music** | Moves it to your playlist |
@@ -73,13 +76,21 @@ Right-click a sound for more:
 
 ### 4. Play music
 
-Open **Music**, click **Add Music** or drop files, then click a track. You can shuffle, repeat the list or one track, seek and change the music volume.
+Open **Music**, click **Add Music** or drop files, then click a track. Your newest songs are at the top. You can shuffle, repeat the list or one track, seek and change the music volume.
 
 <img src="images/music.png" alt="Music tab" width="420">
 
-To play a song from YouTube, copy its link and paste it into the search box. The song starts playing after a few seconds and downloads in the background. Until the download finishes, it sits at the end of your playlist with a progress bar, and you can keep browsing, play other tracks or paste more links. Then it stays in your music with its cover and channel name, and pasting the link again plays that copy. Right-click it to open the video on YouTube. If you type a link instead of pasting it, click **Play from YouTube**. The first time, the plugin also downloads the two tools it needs, about 24 MB.
+To play a song from YouTube, copy its link and paste it into the search box. A card shows the video's thumbnail, title and channel, and nothing downloads until you click **Download**. Then the song starts playing after a few seconds while it downloads in the background. It waits at the top of your playlist with a progress bar, and you can keep browsing, play other tracks or paste more links. Once saved, it stays in your music with its cover and channel name, and its link's card shows **Play** instead of **Download**. Right-click the song to open the video on YouTube. The first time, the plugin also downloads the two tools it needs, about 24 MB.
 
-<img src="images/youtube-link.png" alt="A YouTube song playing in the Music tab while it downloads" width="420">
+<img src="images/youtube-link.png" alt="A YouTube link's card in the Music tab" width="420">
+
+### 5. Set a join sound
+
+Right-click a sound in **Soundboard** or **My Sounds** and choose **Set as Join Sound**. It plays once when you join or switch to a voice channel on a server, and a small arrow-in-a-door badge marks it. Choose **Remove Join Sound** in the same menu to turn it off.
+
+- A soundboard sound plays with Discord's soundboard, as if you clicked it. A sound from another server needs Nitro there, or it plays through your microphone.
+- Your own sounds play through your microphone, so on the desktop app others hear them only with **Webrtc Engine** on.
+- It stays quiet while you're muted, and reconnecting to the same channel doesn't play it again.
 
 ## Letting others hear your own sounds
 

@@ -24,6 +24,28 @@ import { Native } from "../utils/native";
 import { youTubeVideoId } from "../utils/youtube";
 import { musicStore, playStream, playTrack, releaseTrack } from "./player";
 
+export type YouTubePreview = Awaited<ReturnType<NonNullable<typeof Native>["getYouTubePreview"]>>;
+
+// Previews by video id, so pasting a link again doesn't ask YouTube again
+const previews = new Map<string, Promise<YouTubePreview>>();
+
+// The video's title, channel and thumbnail, before anything downloads
+export function loadYouTubePreview(videoId: string) {
+    let preview = previews.get(videoId);
+    if (!preview) {
+        preview = Native!.getYouTubePreview(`https://www.youtube.com/watch?v=${videoId}`);
+        // Asks again next time when YouTube couldn't be reached
+        preview.then(
+            ({ video }) => {
+                if (!video.found && video.reason === "unreachable") previews.delete(videoId);
+            },
+            () => previews.delete(videoId)
+        );
+        previews.set(videoId, preview);
+    }
+    return preview;
+}
+
 const POLL_INTERVAL = 400;
 // The most audio the player gets at once from a saved song. Its buffer holds about 8 MB, and a bigger piece never fits.
 const STREAM_CHUNK = 1024 * 1024;
@@ -133,8 +155,9 @@ async function followDownload(id: string) {
 
 export type YouTubeResult = { item: LibraryItem; } | { song: PendingSong; };
 
-// A pasted link plays from the library when the song is already there. Otherwise the song downloads in
-// the background, shows in the playlist right away, and plays as soon as its audio starts arriving.
+// Downloads a link's song in the background, once its card's Download button is pressed. The song shows in
+// the playlist right away and plays as soon as its audio starts arriving. A song already in the library
+// plays from there instead.
 export async function playFromYouTube(link: string): Promise<YouTubeResult> {
     if (!Native) throw new Error("YouTube links need the Discord desktop app");
 

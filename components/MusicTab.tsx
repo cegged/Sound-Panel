@@ -5,7 +5,6 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { LinkIcon } from "@components/Icons";
 import { showToast, useEffect, useState } from "@webpack/common";
 import type { CSSProperties } from "react";
 
@@ -20,12 +19,13 @@ import {
 } from "../audio/player";
 import { playFromYouTube, playPendingSong } from "../audio/youtube";
 import {
-    isYouTubeLink,
+    downloadLabel,
     LibraryItem,
     type PendingSong,
     updateItem,
     useCoverUrl,
     useLibrary,
+    useLibrarySong,
     usePendingSongs,
     useYouTubePreparing
 } from "../data/library";
@@ -33,6 +33,7 @@ import { settings } from "../settings";
 import { showError } from "../utils/logger";
 import { Native } from "../utils/native";
 import { useStore } from "../utils/store";
+import { youTubeVideoId } from "../utils/youtube";
 import { cl, EmptyState, FileDropZone, formatTime, matchesQuery, RangeSlider, RenameInput, SearchBox, UploadButton } from "./common";
 import {
     MusicNoteIcon,
@@ -46,13 +47,11 @@ import {
     SpeakerIcon
 } from "./icons";
 import { openLibraryItemMenu } from "./LibraryItemMenu";
+import { YouTubeCard } from "./YouTubeCard";
 
 function run(action: () => Promise<unknown>) {
     action().catch(err => showError("Couldn't play this track", err));
 }
-
-const downloadLabel = (song: PendingSong) =>
-    song.progress === null ? "Loading from YouTube" : `Downloading ${Math.round(song.progress * 100)}%`;
 
 // The position changes several times a second, so only this part re-renders for it
 function SeekBar({ fallbackDuration }: { fallbackDuration: number; }) {
@@ -225,65 +224,64 @@ export function MusicTab() {
     const playing = useStore(musicStore, s => s.playing);
     const [query, setQuery] = useState("");
     const [editingId, setEditingId] = useState<string | null>(null);
+    const [starting, setStarting] = useState(false);
 
-    // A typed link isn't a search, so the whole playlist stays visible
-    const typedLink = isYouTubeLink(query);
-    const visible = typedLink ? tracks : tracks.filter(track => matchesQuery(track.name, query));
-    const visiblePending = typedLink ? pending : pending.filter(song => matchesQuery(song.name, query));
+    // A link isn't a search, so the whole playlist stays visible below its card
+    const videoId = Native ? youTubeVideoId(query) : null;
+    const savedSong = useLibrarySong(videoId);
+    const visible = videoId ? tracks : tracks.filter(track => matchesQuery(track.name, query));
+    const visiblePending = videoId ? pending : pending.filter(song => matchesQuery(song.name, query));
 
     useEffect(() => {
         if (preparing) showToast({ text: "Getting YouTube links ready. This happens once and downloads about 24 MB" });
     }, [preparing]);
 
-    const startYouTube = (link: string) => {
-        setQuery(current => current === link ? "" : current);
-        playFromYouTube(link).then(
-            result => {
-                // A new song shows in the playlist and plays by itself as soon as its audio arrives
-                if (!("item" in result)) return;
+    const startYouTube = (text: string) => {
+        setStarting(true);
+        playFromYouTube(text.trim())
+            .then(
+                result => {
+                    // The card makes way for the song, which waits at the top of the playlist and plays once its audio arrives
+                    setQuery(current => current === text ? "" : current);
+                    if (!("item" in result)) return;
 
-                const { item } = result;
-                if (item.kind !== "music") {
-                    showToast({ text: `"${item.name}" is already in My Sounds` });
-                    return;
-                }
+                    // Another Discord app added it in the meantime
+                    const { item } = result;
+                    if (item.kind !== "music") {
+                        showToast({ text: `"${item.name}" is already in My Sounds` });
+                        return;
+                    }
 
-                showToast({ text: `"${item.name}" is already in your music` });
-                run(() => playTrack(item.id));
-            },
-            err => showError(`Couldn't add it from YouTube: ${err.message}`, err)
-        );
+                    showToast({ text: `"${item.name}" is already in your music` });
+                    run(() => playTrack(item.id));
+                },
+                err => showError(`Couldn't add it from YouTube: ${err.message}`, err)
+            )
+            .finally(() => setStarting(false));
     };
 
     return (
         <FileDropZone kind="music">
             <div className={cl("tab")}>
                 <NowPlaying tracks={tracks} pending={pending} />
-                <form
-                    className={cl("toolbar")}
-                    onSubmit={e => {
-                        e.preventDefault();
-                        if (typedLink && !preparing) startYouTube(query);
-                    }}
-                >
-                    <SearchBox
-                        value={query}
-                        onChange={setQuery}
-                        placeholder={Native ? "Search or paste a YouTube link" : "Search your music"}
-                        // A pasted link starts playing right away
-                        onPaste={text => {
-                            if (!isYouTubeLink(text)) return false;
-                            startYouTube(text.trim());
-                            return true;
-                        }}
-                    />
-                    {typedLink || preparing ? (
-                        <button type="submit" className={cl("action-button", "primary")} disabled={preparing}>
-                            <LinkIcon width={16} height={16} />
-                            <span>{preparing ? "Getting ready..." : "Play from YouTube"}</span>
-                        </button>
-                    ) : (
+                <form className={cl("youtube-form")} onSubmit={e => e.preventDefault()}>
+                    <div className={cl("toolbar")}>
+                        <SearchBox
+                            value={query}
+                            onChange={setQuery}
+                            placeholder={Native ? "Search or paste a YouTube link" : "Search your music"}
+                        />
                         <UploadButton kind="music" label="Add Music" />
+                    </div>
+                    {videoId && (
+                        <YouTubeCard
+                            videoId={videoId}
+                            saved={savedSong}
+                            pending={pending.find(song => song.youtubeId === videoId)}
+                            busy={preparing ? "Getting ready..." : starting ? "Starting..." : null}
+                            onDownload={() => startYouTube(query)}
+                            onClose={() => setQuery("")}
+                        />
                     )}
                 </form>
                 <div className={cl("scroller")}>
@@ -297,6 +295,9 @@ export function MusicTab() {
                         <EmptyState icon={<MusicNoteIcon size={28} />} title="No tracks match your search" />
                     ) : (
                         <div className={cl("track-list")}>
+                            {visiblePending.map(song => (
+                                <PendingRow key={song.id} song={song} active={song.id === currentId} playing={playing} />
+                            ))}
                             {visible.map(track => (
                                 <TrackRow
                                     key={track.id}
@@ -306,9 +307,6 @@ export function MusicTab() {
                                     editing={editingId === track.id}
                                     setEditing={editing => setEditingId(editing ? track.id : null)}
                                 />
-                            ))}
-                            {visiblePending.map(song => (
-                                <PendingRow key={song.id} song={song} active={song.id === currentId} playing={playing} />
                             ))}
                         </div>
                     )}

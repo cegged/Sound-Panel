@@ -15,11 +15,13 @@ import {
     PermissionStore,
     RestAPI,
     SoundboardStore,
+    UserSettingsActionCreators,
     UserStore,
     useStateFromStores
 } from "@webpack/common";
 
 import { isSelfMuted, mixerStore } from "../audio/mixer";
+import { playClip } from "../audio/player";
 import { settings } from "../settings";
 import { logger } from "../utils/logger";
 import { Native } from "../utils/native";
@@ -82,6 +84,21 @@ export function useSoundContext(channel: Channel | undefined): SoundContext {
     return { channel, muted, canUseSoundboard, canUseExternalSounds, hasNitro, micReady: transmit && mixing, preferMicrophone: serverSoundsThroughMic };
 }
 
+// The same, read once, for a sound that plays while the panel may be closed
+export function getSoundContext(channel: Channel): SoundContext {
+    const { transmit, serverSoundsThroughMic } = settings.store;
+
+    return {
+        channel,
+        muted: isSelfMuted(),
+        canUseSoundboard: !channel.guild_id || PermissionStore.can(USE_SOUNDBOARD, channel),
+        canUseExternalSounds: !channel.guild_id || PermissionStore.can(USE_EXTERNAL_SOUNDS, channel),
+        hasNitro: !!UserStore.getCurrentUser()?.premiumType,
+        micReady: transmit && mixerStore.get().activeMixes > 0,
+        preferMicrophone: serverSoundsThroughMic
+    };
+}
+
 function getSoundboardBlocker(sound: SoundboardSound, ctx: SoundContext) {
     if (!sound.available) return "This sound is unavailable";
     if (!ctx.canUseSoundboard) return "You can't use the soundboard in this channel";
@@ -127,6 +144,33 @@ export function downloadSoundboardSound(soundId: string) {
         soundBlobs.set(soundId, blob);
     }
     return blob;
+}
+
+export const clipKey = (sound: SoundboardSound) => `server:${sound.soundId}`;
+
+export async function playThroughMicrophone(sound: SoundboardSound) {
+    const url = URL.createObjectURL(await downloadSoundboardSound(sound.soundId));
+    try {
+        await playClip({ key: clipKey(sound), url, volume: sound.volume });
+    } finally {
+        // The audio element holds on to the data while it plays
+        URL.revokeObjectURL(url);
+    }
+}
+
+// Discord's own favorites: the same stars as in its soundboard, saved with your account
+export function setSoundboardFavorite(soundId: string, favorite: boolean) {
+    const toggle = (ids: string[] = []) => favorite ? [...ids.filter(id => id !== soundId), soundId] : ids.filter(id => id !== soundId);
+
+    UserSettingsActionCreators.FrecencyUserSettingsActionCreators.updateAsync(
+        "favoriteSoundboardSounds",
+        (favorites: { soundIds?: string[]; orderedSoundIds?: string[]; }) => {
+            favorites.soundIds = toggle(favorites.soundIds);
+            // Discord also keeps the order favorites were added in, once it has started to
+            if (favorites.orderedSoundIds?.length) favorites.orderedSoundIds = toggle(favorites.orderedSoundIds);
+        },
+        0 // INFREQUENT_USER_ACTION
+    );
 }
 
 // The same request Discord's soundboard makes, except errors aren't swallowed

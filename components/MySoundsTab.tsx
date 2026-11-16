@@ -7,21 +7,34 @@
 
 import { useState } from "@webpack/common";
 
+import { isLibraryJoinSound } from "../audio/joinSound";
 import { clipStore, playLibrarySound, stopClip } from "../audio/player";
 import { LibraryItem, updateItem, useLibrary } from "../data/library";
 import { settings } from "../settings";
 import { showError } from "../utils/logger";
 import { useStore } from "../utils/store";
-import { cl, EmptyState, FileDropZone, formatTime, matchesQuery, RenameInput, SearchBox, UploadButton } from "./common";
-import { StopIcon, WaveformIcon } from "./icons";
+import {
+    cl,
+    EmptyState,
+    FileDropZone,
+    formatTime,
+    GroupHeader,
+    matchesQuery,
+    RenameInput,
+    SearchBox,
+    UploadButton,
+    useCollapsedGroups
+} from "./common";
+import { JoinSoundIcon, StarIcon, StopIcon, WaveformIcon } from "./icons";
 import { openLibraryItemMenu } from "./LibraryItemMenu";
 
 // Sound effects are short, so "0.8s" says more than "0:00"
 const clipLength = (seconds: number) => seconds < 60 ? `${seconds.toFixed(1)}s` : formatTime(seconds);
 
-function SoundTile({ item, playing, editing, setEditing }: {
+function SoundTile({ item, playing, joinSound, editing, setEditing }: {
     item: LibraryItem;
     playing: boolean;
+    joinSound: boolean;
     editing: boolean;
     setEditing(editing: boolean): void;
 }) {
@@ -41,7 +54,7 @@ function SoundTile({ item, playing, editing, setEditing }: {
         <div
             role="button"
             tabIndex={0}
-            title={item.name}
+            title={joinSound ? `${item.name} · Join sound` : item.name}
             className={cl("tile", { "tile-playing": playing })}
             onClick={onClick}
             onKeyDown={e => (e.key === "Enter" || e.key === " ") && onClick()}
@@ -57,7 +70,9 @@ function SoundTile({ item, playing, editing, setEditing }: {
                 />
             ) : (
                 <>
+                    {item.favorite && <StarIcon className={cl("tile-star")} size={14} />}
                     <span className={cl("tile-name")}>{item.name}</span>
+                    {joinSound && <JoinSoundIcon className={cl("tile-badge", "tile-badge-join")} size={14} />}
                     {item.duration > 0 && <span className={cl("tile-meta")}>{clipLength(item.duration)}</span>}
                 </>
             )}
@@ -68,11 +83,35 @@ function SoundTile({ item, playing, editing, setEditing }: {
 export function MySoundsTab() {
     const { loaded, items } = useLibrary("sound");
     const playing = useStore(clipStore, s => s.playing);
+    const { joinSound } = settings.use(["joinSound"]);
     const [query, setQuery] = useState("");
     const [editingId, setEditingId] = useState<string | null>(null);
+    const [collapsed, toggleGroup] = useCollapsedGroups();
 
     const visible = items.filter(item => matchesQuery(item.name, query));
     const anyPlaying = items.some(item => playing.includes(item.id));
+
+    // Favorites come first, and then the other sounds get a heading of their own
+    const favorites = visible.filter(item => item.favorite);
+    const groups = favorites.length === 0 ? null : [
+        { id: "favorites", name: "Favorites", items: favorites },
+        { id: "others", name: "Other Sounds", items: visible.filter(item => !item.favorite) }
+    ].filter(group => group.items.length);
+
+    const tiles = (list: LibraryItem[]) => (
+        <div className={cl("grid")}>
+            {list.map(item => (
+                <SoundTile
+                    key={item.id}
+                    item={item}
+                    playing={playing.includes(item.id)}
+                    joinSound={isLibraryJoinSound(joinSound, item.id)}
+                    editing={editingId === item.id}
+                    setEditing={editing => setEditingId(editing ? item.id : null)}
+                />
+            ))}
+        </div>
+    );
 
     return (
         <FileDropZone kind="sound">
@@ -101,19 +140,24 @@ export function MySoundsTab() {
                         </EmptyState>
                     ) : visible.length === 0 ? (
                         <EmptyState icon={<WaveformIcon size={28} />} title="No sounds match your search" />
-                    ) : (
-                        <div className={cl("grid")}>
-                            {visible.map(item => (
-                                <SoundTile
-                                    key={item.id}
-                                    item={item}
-                                    playing={playing.includes(item.id)}
-                                    editing={editingId === item.id}
-                                    setEditing={editing => setEditingId(editing ? item.id : null)}
+                    ) : groups ? groups.map(group => {
+                        const isCollapsed = collapsed.has(group.id) && !query;
+
+                        return (
+                            <section key={group.id} className={cl("group")}>
+                                <GroupHeader
+                                    icon={group.id === "favorites"
+                                        ? <span className={cl("group-icon", "group-icon-favorites")}><StarIcon size={14} /></span>
+                                        : <span className={cl("group-icon", "group-icon-fallback")}><WaveformIcon size={10} /></span>}
+                                    name={group.name}
+                                    count={group.items.length}
+                                    collapsed={isCollapsed}
+                                    onToggle={() => toggleGroup(group.id)}
                                 />
-                            ))}
-                        </div>
-                    )}
+                                {!isCollapsed && tiles(group.items)}
+                            </section>
+                        );
+                    }) : tiles(visible)}
                 </div>
             </div>
         </FileDropZone>

@@ -25,12 +25,9 @@
  * plain: sounds and songs use translucent fills, never glass of their own.
  */
 
-.vc-soundpanel-popout {
-    --vc-soundpanel-accent: var(--control-primary-background-default, var(--brand-500));
-    /* Discord's speaking green. Whatever the call hears wears it as a ring, like a speaking avatar. */
-    --vc-soundpanel-speaking: var(--status-positive, #23a55a);
-    /* Something that plays only for you gets a plain ring instead */
-    --vc-soundpanel-ring: var(--interactive-text-default);
+/* The glass, shared by the panel and the menus it opens */
+.vc-soundpanel-popout,
+.vc-soundpanel-menu {
     /*
      * The glass takes Discord's own surface color, so every Discord theme tints it. It's thin, with a
      * light blur, so the chat behind it stays readable, and it dims what's behind so the panel's own
@@ -49,6 +46,14 @@
     --vc-soundpanel-secondary: color-mix(in oklab, var(--text-muted), var(--text-default) 75%);
     --vc-soundpanel-sheen: rgb(255 255 255 / 12%);
     --vc-soundpanel-edge: rgb(255 255 255 / 34%);
+}
+
+.vc-soundpanel-popout {
+    --vc-soundpanel-accent: var(--control-primary-background-default, var(--brand-500));
+    /* Discord's speaking green. Whatever the call hears wears it as a ring, like a speaking avatar. */
+    --vc-soundpanel-speaking: var(--status-positive, #23a55a);
+    /* Something that plays only for you gets a plain ring instead */
+    --vc-soundpanel-ring: var(--interactive-text-default);
     --vc-soundpanel-thumb: rgb(255 255 255 / 16%);
 
     position: relative;
@@ -72,7 +77,8 @@
 }
 
 /* The light-catching rim: bright where light falls on the top edge, faint along the sides */
-.vc-soundpanel-popout::before {
+.vc-soundpanel-popout::before,
+.vc-soundpanel-menu::before {
     position: absolute;
     inset: 0;
     z-index: 3;
@@ -94,12 +100,15 @@
     mask-composite: exclude;
 }
 
-.theme-light .vc-soundpanel-popout {
+.theme-light :is(.vc-soundpanel-popout, .vc-soundpanel-menu) {
     /* Over chat text the secondary text keeps 5.8:1; a dark image behind the panel brings it to 3.5:1 */
     --vc-soundpanel-backdrop: blur(4px) saturate(1.3) brightness(1.2);
     --vc-soundpanel-secondary: color-mix(in oklab, var(--text-muted), var(--text-default) 70%);
     --vc-soundpanel-sheen: rgb(255 255 255 / 90%);
     --vc-soundpanel-edge: rgb(255 255 255 / 95%);
+}
+
+.theme-light .vc-soundpanel-popout {
     --vc-soundpanel-thumb: #fff;
 
     box-shadow:
@@ -111,6 +120,36 @@
 
 /* At 0% transparency the glass is solid, so nothing behind it needs blurring */
 .vc-soundpanel-solid {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+
+/*
+ * The panel's right-click menus wear its glass, with Discord's own items inside. The class is doubled
+ * because Discord's menu style can load after this file and would win a tie.
+ */
+.vc-soundpanel-menu.vc-soundpanel-menu {
+    position: relative;
+    border: none;
+    border-radius: 14px;
+    background: var(--vc-soundpanel-glass);
+    -webkit-backdrop-filter: var(--vc-soundpanel-backdrop);
+    backdrop-filter: var(--vc-soundpanel-backdrop);
+    box-shadow:
+        inset 0 1px 0 var(--vc-soundpanel-sheen),
+        0 16px 40px rgb(0 0 0 / 36%),
+        0 2px 8px rgb(0 0 0 / 20%);
+}
+
+.theme-light .vc-soundpanel-menu.vc-soundpanel-menu {
+    box-shadow:
+        inset 0 1px 0 var(--vc-soundpanel-sheen),
+        0 0 0 1px rgb(0 0 0 / 7%),
+        0 16px 40px rgb(0 0 0 / 16%),
+        0 2px 8px rgb(0 0 0 / 10%);
+}
+
+.vc-soundpanel-menu.vc-soundpanel-solid {
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
 }
@@ -292,6 +331,84 @@
     align-items: center;
     gap: 8px;
     padding: 8px 16px 2px;
+}
+
+/* A YouTube link in the search box: its card, before anything downloads */
+.vc-soundpanel-youtube-form {
+    display: contents;
+}
+
+.vc-soundpanel-youtube-card {
+    display: flex;
+    gap: 12px;
+    margin: 8px 16px 0;
+    padding: 12px;
+    border-radius: 20px;
+    background: var(--background-mod-subtle);
+    animation: vc-soundpanel-fade-in 0.16s ease-out;
+}
+
+/* The video's own 16:9 thumbnail, so it reads as a YouTube preview */
+.vc-soundpanel-youtube-thumbnail {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    align-self: flex-start;
+    width: 128px;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    border-radius: 12px;
+    background: var(--background-mod-normal);
+    color: var(--vc-soundpanel-secondary);
+}
+
+.vc-soundpanel-youtube-thumbnail img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.vc-soundpanel-youtube-info {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.vc-soundpanel-youtube-title {
+    display: -webkit-box;
+    overflow: hidden;
+    color: var(--text-strong);
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 20px;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+/* Still looking, or YouTube had nothing to say about the video */
+.vc-soundpanel-youtube-title-quiet {
+    color: var(--text-default);
+    font-weight: 500;
+}
+
+.vc-soundpanel-youtube-detail {
+    overflow: hidden;
+    color: var(--vc-soundpanel-secondary);
+    font-size: 13px;
+    line-height: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.vc-soundpanel-youtube-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: auto;
+    padding-top: 8px;
 }
 
 .vc-soundpanel-toolbar .vc-soundpanel-icon-button {
@@ -682,6 +799,17 @@
 .vc-soundpanel-tile-badge {
     flex-shrink: 0;
     color: var(--vc-soundpanel-secondary);
+}
+
+/* Your join sound, a setting that's on */
+.vc-soundpanel-tile-badge-join {
+    color: var(--vc-soundpanel-accent);
+}
+
+/* The same gold as the favorites heading */
+.vc-soundpanel-tile-star {
+    flex-shrink: 0;
+    color: var(--status-warning);
 }
 
 .vc-soundpanel-tile-meta {
@@ -1152,7 +1280,8 @@
 /* Accessibility: no see-through glass, stronger edges, no moving thumbs when the system asks */
 
 @media (prefers-reduced-transparency: reduce) {
-    .vc-soundpanel-popout {
+    .vc-soundpanel-popout,
+    .vc-soundpanel-menu.vc-soundpanel-menu {
         --vc-soundpanel-glass: var(--background-surface-high);
 
         -webkit-backdrop-filter: none;
@@ -1161,7 +1290,8 @@
 }
 
 @media (prefers-contrast: more) {
-    .vc-soundpanel-popout {
+    .vc-soundpanel-popout,
+    .vc-soundpanel-menu.vc-soundpanel-menu {
         --vc-soundpanel-glass: var(--background-surface-high);
         --vc-soundpanel-edge: var(--border-strong);
 

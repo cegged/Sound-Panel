@@ -5,13 +5,14 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { DownArrow, StarFilled } from "@components/Icons";
 import type { Channel, SoundboardSound } from "@vencord/discord-types";
 import { ContextMenuApi, GuildStore, Menu, showToast, SoundboardStore, Tooltip, useEffect, useState } from "@webpack/common";
 
+import { isSoundboardJoinSound, setJoinSound } from "../audio/joinSound";
 import { clipStore, playClip, stopClip } from "../audio/player";
 import { addBlob } from "../data/library";
 import {
+    clipKey,
     downloadSoundboardSound,
     getEmojiUrl,
     getSoundGroups,
@@ -20,6 +21,8 @@ import {
     getUnicodeEmojiUrl,
     loadSoundboardSounds,
     playServerSound,
+    playThroughMicrophone,
+    setSoundboardFavorite,
     type SoundContext,
     type SoundGroup,
     type SoundRoute,
@@ -28,24 +31,12 @@ import {
 import { settings } from "../settings";
 import { showError } from "../utils/logger";
 import { useFluxUpdates, useStore } from "../utils/store";
-import { cl, EmptyState, matchesQuery, SearchBox } from "./common";
-import { HeadphonesIcon, MicIcon, MusicNoteIcon, PlayIcon, SaveIcon, SoundboardIcon, SpeakerIcon } from "./icons";
-
-const clipKey = (sound: SoundboardSound) => `server:${sound.soundId}`;
+import { cl, EmptyState, GroupHeader, matchesQuery, SearchBox, useCollapsedGroups, useGlassMenu } from "./common";
+import { HeadphonesIcon, JoinSoundIcon, MicIcon, MusicNoteIcon, PlayIcon, SaveIcon, SoundboardIcon, SpeakerIcon, StarIcon } from "./icons";
 
 function previewSound(sound: SoundboardSound) {
     playClip({ key: clipKey(sound), url: getSoundUrl(sound.soundId), volume: sound.volume, localOnly: true })
         .catch(err => showError("Couldn't preview this sound", err));
-}
-
-async function playThroughMicrophone(sound: SoundboardSound) {
-    const url = URL.createObjectURL(await downloadSoundboardSound(sound.soundId));
-    try {
-        await playClip({ key: clipKey(sound), url, volume: sound.volume });
-    } finally {
-        // The audio element holds on to the data while it plays
-        URL.revokeObjectURL(url);
-    }
 }
 
 function playSound(sound: SoundboardSound, channel: Channel | undefined, route: SoundRoute) {
@@ -86,8 +77,13 @@ function SoundEmoji({ sound }: { sound: SoundboardSound; }) {
 }
 
 function ServerSoundMenu({ sound, ctx, route }: { sound: SoundboardSound; ctx: SoundContext; route: SoundRoute; }) {
+    const { joinSound } = settings.use(["joinSound"]);
+    const glass = useGlassMenu();
+    const isJoinSound = isSoundboardJoinSound(joinSound, sound.soundId);
+    const favorite = SoundboardStore.isFavoriteSound(sound.soundId);
+
     return (
-        <Menu.Menu navId="vc-soundpanel-server-sound" onClose={ContextMenuApi.closeContextMenu} aria-label={sound.name}>
+        <Menu.Menu navId="vc-soundpanel-server-sound" onClose={ContextMenuApi.closeContextMenu} aria-label={sound.name} {...glass}>
             <Menu.MenuItem
                 id="vc-soundpanel-play"
                 label="Play With Discord Soundboard"
@@ -110,6 +106,19 @@ function ServerSoundMenu({ sound, ctx, route }: { sound: SoundboardSound; ctx: S
             />
             <Menu.MenuSeparator />
             <Menu.MenuItem
+                id="vc-soundpanel-favorite"
+                label={favorite ? "Remove from Favorites" : "Add to Favorites"}
+                icon={StarIcon}
+                action={() => setSoundboardFavorite(sound.soundId, !favorite)}
+            />
+            <Menu.MenuItem
+                id="vc-soundpanel-join-sound"
+                label={isJoinSound ? "Remove Join Sound" : "Set as Join Sound"}
+                icon={JoinSoundIcon}
+                action={() => setJoinSound(isJoinSound ? null : { type: "soundboard", soundId: sound.soundId, guildId: sound.guildId }, sound.name)}
+            />
+            <Menu.MenuSeparator />
+            <Menu.MenuItem
                 id="vc-soundpanel-save-sound"
                 label="Save to My Sounds"
                 icon={SaveIcon}
@@ -125,7 +134,7 @@ function ServerSoundMenu({ sound, ctx, route }: { sound: SoundboardSound; ctx: S
     );
 }
 
-function ServerSoundTile({ sound, ctx, playing }: { sound: SoundboardSound; ctx: SoundContext; playing: boolean; }) {
+function ServerSoundTile({ sound, ctx, playing, joinSound }: { sound: SoundboardSound; ctx: SoundContext; playing: boolean; joinSound: boolean; }) {
     const route = getSoundRoute(sound, ctx);
 
     const onClick = () => {
@@ -134,7 +143,7 @@ function ServerSoundTile({ sound, ctx, playing }: { sound: SoundboardSound; ctx:
     };
 
     return (
-        <Tooltip text={describeRoute(sound, route)}>
+        <Tooltip text={joinSound ? `${describeRoute(sound, route)} · Join sound` : describeRoute(sound, route)}>
             {tooltipProps => (
                 <button
                     {...tooltipProps}
@@ -150,6 +159,7 @@ function ServerSoundTile({ sound, ctx, playing }: { sound: SoundboardSound; ctx:
                 >
                     <SoundEmoji sound={sound} />
                     <span className={cl("tile-name")}>{sound.name}</span>
+                    {joinSound && <JoinSoundIcon className={cl("tile-badge", "tile-badge-join")} size={14} />}
                     {route.kind === "microphone" && <MicIcon className={cl("tile-badge")} size={14} />}
                     {route.kind === "local" && <HeadphonesIcon className={cl("tile-badge")} size={14} />}
                 </button>
@@ -162,7 +172,7 @@ const acronym = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 3).
 
 function GroupIcon({ group }: { group: SoundGroup; }) {
     if (group.iconUrl) return <img className={cl("group-icon")} src={group.iconUrl} alt="" />;
-    if (group.id === "favorites") return <span className={cl("group-icon", "group-icon-favorites")}><StarFilled width={14} height={14} /></span>;
+    if (group.id === "favorites") return <span className={cl("group-icon", "group-icon-favorites")}><StarIcon size={14} /></span>;
 
     return (
         <span className={cl("group-icon", "group-icon-fallback")}>
@@ -175,8 +185,9 @@ export function ServerSoundsTab({ channel }: { channel?: Channel; }) {
     useFluxUpdates([SoundboardStore, GuildStore]);
     const ctx = useSoundContext(channel);
     const playing = useStore(clipStore, s => s.playing);
+    const { joinSound } = settings.use(["joinSound"]);
     const [query, setQuery] = useState("");
-    const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+    const [collapsed, toggleGroup] = useCollapsedGroups();
 
     useEffect(() => {
         void loadSoundboardSounds();
@@ -185,12 +196,6 @@ export function ServerSoundsTab({ channel }: { channel?: Channel; }) {
     const groups = getSoundGroups()
         .map(group => ({ ...group, sounds: group.sounds.filter(sound => matchesQuery(sound.name, query)) }))
         .filter(group => group.sounds.length);
-
-    const toggleGroup = (id: string) => setCollapsed(prev => {
-        const next = new Set(prev);
-        if (!next.delete(id)) next.add(id);
-        return next;
-    });
 
     const loading = SoundboardStore.isFetchingSounds() || !SoundboardStore.hasFetchedAllSounds();
 
@@ -213,12 +218,13 @@ export function ServerSoundsTab({ channel }: { channel?: Channel; }) {
 
                     return (
                         <section key={group.id} className={cl("group")}>
-                            <button type="button" className={cl("group-header")} onClick={() => toggleGroup(group.id)} aria-expanded={!isCollapsed}>
-                                <GroupIcon group={group} />
-                                <span className={cl("group-name")}>{group.name}</span>
-                                <span className={cl("group-count")}>{group.sounds.length}</span>
-                                <span className={cl("chevron", { "chevron-collapsed": isCollapsed })}><DownArrow width={16} height={16} /></span>
-                            </button>
+                            <GroupHeader
+                                icon={<GroupIcon group={group} />}
+                                name={group.name}
+                                count={group.sounds.length}
+                                collapsed={isCollapsed}
+                                onToggle={() => toggleGroup(group.id)}
+                            />
                             {!isCollapsed && (
                                 <div className={cl("grid")}>
                                     {group.sounds.map(sound => (
@@ -227,6 +233,7 @@ export function ServerSoundsTab({ channel }: { channel?: Channel; }) {
                                             sound={sound}
                                             ctx={ctx}
                                             playing={playing.includes(clipKey(sound))}
+                                            joinSound={isSoundboardJoinSound(joinSound, sound.soundId)}
                                         />
                                     ))}
                                 </div>

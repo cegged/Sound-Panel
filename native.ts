@@ -318,11 +318,13 @@ async function runYtDlpUpToDate(path: string, args: string[], onLine?: (line: st
     }
 }
 
-// YouTube's medium thumbnail is 16:9 without black bars, so it crops cleanly to a square cover.
-// A missing cover shouldn't cost the song, so failures only mean no cover.
+// YouTube's medium thumbnail is 16:9 without black bars, so it crops cleanly to a square cover
+const thumbnailUrl = (videoId: string) => `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
+
+// A missing cover shouldn't cost the song, so failures only mean no cover
 async function saveCover(videoId: string, id: string) {
     try {
-        const image = await download(`https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`);
+        const image = await download(thumbnailUrl(videoId));
         await mkdir(COVERS_DIR, { recursive: true });
         await writeFile(coverFilePath(id), image);
         return true;
@@ -342,18 +344,38 @@ function getJsRuntime(quickJs: string) {
     });
 }
 
-// YouTube's oEmbed answers in a fraction of a second, long before yt-dlp has found the video
-async function fetchPreview(videoId: string) {
+export type VideoLookup =
+    | { found: true; title: string; channel?: string; }
+    // Missing: deleted or made up. Restricted: private, or its owner doesn't allow it on other sites.
+    | { found: false; reason: "missing" | "restricted" | "unreachable"; };
+
+// YouTube's oEmbed answers in a fifth of a second, long before yt-dlp has found the video
+async function lookUpVideo(videoId: string): Promise<VideoLookup> {
     try {
         const video = encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`);
         const res = await fetch(`https://www.youtube.com/oembed?format=json&url=${video}`);
-        if (!res.ok) return undefined;
+        if (res.status === 400 || res.status === 404) return { found: false, reason: "missing" };
+        if (res.status === 401 || res.status === 403) return { found: false, reason: "restricted" };
+        if (!res.ok) return { found: false, reason: "unreachable" };
 
         const data: { title?: string; author_name?: string; } = await res.json();
-        return data.title ? { title: data.title, channel: data.author_name } : undefined;
+        return data.title ? { found: true, title: data.title, channel: data.author_name } : { found: false, reason: "unreachable" };
     } catch {
-        return undefined;
+        return { found: false, reason: "unreachable" };
     }
+}
+
+// What a link points to before anything downloads: the video's title, channel and thumbnail
+export async function getYouTubePreview(_: IpcMainInvokeEvent, link: string) {
+    const videoId = youTubeVideoId(link);
+    if (!videoId) throw new Error("That isn't a link to a YouTube video");
+
+    const [video, thumbnail] = await Promise.all([
+        lookUpVideo(videoId),
+        download(thumbnailUrl(videoId)).then(data => new Uint8Array(data), () => null)
+    ]);
+
+    return { videoId, video, thumbnail };
 }
 
 // The bytes of a file from offset onwards, or null when there are none yet
@@ -485,7 +507,9 @@ export async function startYouTubeDownload(_: IpcMainInvokeEvent, link: string) 
     youTubeDownloads.set(id, download);
 
     void download.coverSaved.then(saved => { download.cover = saved; });
-    void fetchPreview(videoId).then(preview => { download.preview = preview; });
+    void lookUpVideo(videoId).then(video => {
+        if (video.found) download.preview = { title: video.title, channel: video.channel };
+    });
     void runYouTubeDownload(id, download);
 
     return id;

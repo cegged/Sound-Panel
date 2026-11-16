@@ -13,9 +13,9 @@ import type { CSSProperties } from "react";
 
 import { stopAll, useIsPlaying } from "../audio/player";
 import { refreshLibrary } from "../data/library";
-import { DEFAULT_TRANSPARENCY, PanelTab, settings } from "../settings";
+import { DEFAULT_TRANSPARENCY, glassOpacity, PanelTab, settings } from "../settings";
 import { showError } from "../utils/logger";
-import { cl } from "./common";
+import { cl, useGlassMenu } from "./common";
 import { StopIcon, TransparencyIcon } from "./icons";
 import { MusicTab } from "./MusicTab";
 import { MySoundsTab } from "./MySoundsTab";
@@ -68,9 +68,10 @@ function AuthorCredit() {
 // The panel's transparency, changed live while the slider moves
 function TransparencyMenu() {
     const { transparency } = settings.use(["transparency"]);
+    const glass = useGlassMenu();
 
     return (
-        <Menu.Menu navId="vc-soundpanel-transparency" onClose={ContextMenuApi.closeContextMenu} aria-label="Panel transparency">
+        <Menu.Menu navId="vc-soundpanel-transparency" onClose={ContextMenuApi.closeContextMenu} aria-label="Panel transparency" {...glass}>
             <Menu.MenuControlItem
                 id="vc-soundpanel-transparency"
                 label="Transparency"
@@ -108,11 +109,11 @@ function SoundPanelPopout({ channel }: { channel?: Channel; }) {
     }, []);
 
     // While the call hears the panel, whatever plays wears Discord's green speaking ring.
-    // The glass gets thinner as transparency goes up: solid at 0%, a fifth of the glass left at 100%.
+    // The glass gets thinner as transparency goes up.
     return (
         <div
             className={cl("popout", { live, "on-air": live && isPlaying, solid: transparency === 0 })}
-            style={{ "--vc-soundpanel-opacity": 100 - 0.8 * transparency } as CSSProperties}
+            style={{ "--vc-soundpanel-opacity": glassOpacity(transparency) } as CSSProperties}
             role="dialog"
             aria-label="Sound Panel"
         >

@@ -22,9 +22,11 @@ export interface LibraryItem {
     artist?: string;
     youtubeId?: string;
     cover?: boolean;
+    // Favorites sit at the top of My Sounds
+    favorite?: boolean;
 }
 
-export type LibraryPatch = Partial<Pick<LibraryItem, "name" | "volume" | "kind">>;
+export type LibraryPatch = Partial<Pick<LibraryItem, "name" | "volume" | "kind" | "favorite">>;
 
 export type IndexChange =
     | { type: "add"; items: LibraryItem[]; }

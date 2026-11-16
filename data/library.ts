@@ -10,7 +10,6 @@ import { useEffect, useMemo, useState } from "@webpack/common";
 import { logger } from "../utils/logger";
 import { Native } from "../utils/native";
 import { createStore, useStore } from "../utils/store";
-import { youTubeVideoId } from "../utils/youtube";
 import type { LibraryItem, LibraryKind, LibraryPatch } from "./libraryIndex";
 import { migrateLegacyLibrary, storage } from "./storage";
 
@@ -62,14 +61,24 @@ export async function refreshLibrary() {
     }
 }
 
+// Newest first, in the lists and for next and previous
+const newestFirst = (a: LibraryItem, b: LibraryItem) => b.addedAt - a.addedAt;
+const itemsOfKind = (items: LibraryItem[], kind: LibraryKind) => items.filter(item => item.kind === kind).sort(newestFirst);
+
 export function getItems(kind: LibraryKind) {
-    return libraryStore.get().items.filter(item => item.kind === kind);
+    return itemsOfKind(libraryStore.get().items, kind);
 }
+
+export const getItem = (id: string) => libraryStore.get().items.find(item => item.id === id);
+
+// The library's copy of a YouTube video, in Music or My Sounds
+export const useLibrarySong = (videoId: string | null) =>
+    useStore(libraryStore, s => videoId ? s.items.find(item => item.youtubeId === videoId) : undefined);
 
 export function useLibrary(kind: LibraryKind) {
     const loaded = useStore(libraryStore, s => s.loaded);
     const all = useStore(libraryStore, s => s.items);
-    const items = useMemo(() => all.filter(item => item.kind === kind), [all, kind]);
+    const items = useMemo(() => itemsOfKind(all, kind), [all, kind]);
     return { loaded, items };
 }
 
@@ -117,7 +126,8 @@ export async function addFiles(files: File[], kind: LibraryKind) {
     return { added: added.length, skipped: files.length - audioFiles.length };
 }
 
-export const isYouTubeLink = (text: string) => !!Native && youTubeVideoId(text) !== null;
+export const downloadLabel = (song: PendingSong) =>
+    song.progress === null ? "Loading from YouTube" : `Downloading ${Math.round(song.progress * 100)}%`;
 export const usePendingSongs = () => useStore(pendingStore, s => s.songs);
 export const useYouTubePreparing = () => useStore(pendingStore, s => s.preparing);
 export const getPendingSong = (id: string) => pendingStore.get().songs.find(song => song.id === id);

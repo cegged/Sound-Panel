@@ -280,7 +280,7 @@ export async function skipTrack(direction: 1 | -1, automatic = false) {
         do next = Math.floor(Math.random() * tracks.length);
         while (next === index);
     } else if (index === -1) {
-        // Nothing from the playlist plays, or a song still downloading, which comes after the playlist
+        // Nothing from the playlist plays, or a song still downloading, which sits above the playlist
         next = direction === 1 ? 0 : tracks.length - 1;
     } else {
         next = index + direction;

@@ -12,6 +12,7 @@ import { Link } from "@components/Link";
 import { Paragraph } from "@components/Paragraph";
 import definePlugin from "@utils/types";
 
+import { onRtcConnectionState, onVoiceChannelSelect } from "./audio/joinSound";
 import { applyOutputDevice, installMicrophoneHook, uninstallMicrophoneHook } from "./audio/mixer";
 import { disposePlayer } from "./audio/player";
 import { PanelButton } from "./components/PanelButton";
@@ -169,7 +170,10 @@ export default definePlugin({
     getVoiceActivityThreshold,
 
     flux: {
-        AUDIO_SET_OUTPUT_DEVICE: applyOutputDevice
+        AUDIO_SET_OUTPUT_DEVICE: applyOutputDevice,
+        // The join sound
+        VOICE_CHANNEL_SELECT: onVoiceChannelSelect,
+        RTC_CONNECTION_STATE: onRtcConnectionState
     },
 
     start() {

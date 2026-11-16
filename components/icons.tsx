@@ -150,6 +150,25 @@ export const TransparencyIcon = (props: IconProps) => (
     </Svg>
 );
 
+// Rounded at the points by its own stroke, like Discord's favorite star
+export const StarIcon = (props: IconProps) => (
+    <Svg {...props}>
+        <path
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinejoin="round"
+            d="M12 3.5l2.6 5.27 5.82.85-4.21 4.1.99 5.8L12 16.78l-5.2 2.74.99-5.8-4.21-4.1 5.82-.85Z"
+        />
+    </Svg>
+);
+
+// An arrow going in through a door: the sound that plays when you join a voice channel
+export const JoinSoundIcon = (props: IconProps) => (
+    <Svg {...props}>
+        <path {...line} d="M14 4h3.5A2.5 2.5 0 0 1 20 6.5v11a2.5 2.5 0 0 1-2.5 2.5H14M4 12h11M11 8l4 4-4 4" />
+    </Svg>
+);
+
 export const UploadIcon = (props: IconProps) => (
     <Svg {...props}>
         <path {...line} d={`M12 15V4M7.5 8.5 12 4l4.5 4.5${TRAY}`} />
