@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { useMemo } from "@webpack/common";
+import { useEffect, useMemo, useState } from "@webpack/common";
 
 import { logger } from "../utils/logger";
 import { Native } from "../utils/native";
@@ -22,8 +22,10 @@ const YOUTUBE_LINK = /^(https?:\/\/)?((www|m|music)\.)?(youtube\.com\/(watch\?|s
 
 const libraryStore = createStore({ loaded: false, items: [] as LibraryItem[] });
 // Outside the panel, so closing and reopening it keeps showing a download that's still running
-const youTubeStore = createStore({ status: "idle" as YouTubeStatus });
+const youTubeStore = createStore({ status: "idle" as YouTubeStatus, progress: null as number | null });
 const fileUrls = new Map<string, string>();
+const coverUrls = new Map<string, string>();
+const coverLoads = new Map<string, Promise<string | null>>();
 let loadPromise: Promise<void> | undefined;
 
 const setItems = (items: LibraryItem[]) => libraryStore.set({ loaded: true, items });
@@ -106,6 +108,7 @@ export async function addFiles(files: File[], kind: LibraryKind) {
 
 export const isYouTubeLink = (text: string) => !!Native && YOUTUBE_LINK.test(text.trim());
 export const useYouTubeStatus = () => useStore(youTubeStore, s => s.status);
+export const useYouTubeProgress = () => useStore(youTubeStore, s => s.progress);
 
 // Errors from the main process arrive as "Error invoking remote method '...': Error: <reason>"
 const nativeReason = (err: unknown) => String((err as Error)?.message ?? err).replace(/^Error invoking remote method '[^']+': (\w*Error: )?/, "");
@@ -123,17 +126,61 @@ export async function addFromYouTube(link: string) {
             await Native.prepareYouTubeTools();
         }
 
-        youTubeStore.set({ status: "downloading" });
-        const { id, name, mimeType, size, duration } = await Native.downloadYouTubeAudio(link);
-        const item: LibraryItem = { id, name, kind: "music", mimeType, size, duration, volume: 1, addedAt: Date.now() };
+        youTubeStore.set({ status: "downloading", progress: 0 });
+        const poll = setInterval(() => {
+            Native!.getYouTubeProgress().then(progress => {
+                if (progress !== null && youTubeStore.get().status === "downloading") youTubeStore.set({ progress });
+            }, () => { });
+        }, 400);
 
-        setItems(await storage.changeIndex({ type: "add", items: [item] }));
-        return item;
+        try {
+            const download = await Native.downloadYouTubeAudio(link);
+            const item: LibraryItem = { ...download, kind: "music", volume: 1, addedAt: Date.now() };
+
+            setItems(await storage.changeIndex({ type: "add", items: [item] }));
+            return item;
+        } finally {
+            clearInterval(poll);
+        }
     } catch (err) {
         throw new Error(nativeReason(err), { cause: err });
     } finally {
-        youTubeStore.set({ status: "idle" });
+        youTubeStore.set({ status: "idle", progress: null });
     }
+}
+
+function loadCover(id: string) {
+    let load = coverLoads.get(id);
+    if (load) return load;
+
+    load = (Native?.readLibraryCover(id) ?? Promise.resolve(null))
+        .then(data => {
+            if (!data) return null;
+
+            const url = URL.createObjectURL(new Blob([data], { type: "image/jpeg" }));
+            coverUrls.set(id, url);
+            return url;
+        })
+        .finally(() => coverLoads.delete(id));
+
+    coverLoads.set(id, load);
+    return load;
+}
+
+// The song's cover as an image URL, or null while it loads and for songs without one
+export function useCoverUrl(item: LibraryItem | undefined) {
+    const id = item?.cover ? item.id : null;
+    const [, setLoaded] = useState(0);
+
+    useEffect(() => {
+        if (!id || coverUrls.has(id)) return;
+
+        let mounted = true;
+        loadCover(id).then(() => mounted && setLoaded(n => n + 1), err => logger.error("Failed to load a cover", err));
+        return () => { mounted = false; };
+    }, [id]);
+
+    return id ? coverUrls.get(id) ?? null : null;
 }
 
 export function addBlob(blob: Blob, name: string, kind: LibraryKind) {
@@ -147,7 +194,8 @@ export async function updateItem(id: string, patch: LibraryPatch) {
 }
 
 export async function removeItem(id: string) {
-    revokeFileUrl(id);
+    revokeUrl(fileUrls, id);
+    revokeUrl(coverUrls, id);
     setItems(await storage.changeIndex({ type: "remove", id }));
     await storage.deleteFile(id);
 }
@@ -165,15 +213,17 @@ export async function getFileUrl(id: string) {
     return url;
 }
 
-function revokeFileUrl(id: string) {
-    const url = fileUrls.get(id);
+function revokeUrl(urls: Map<string, string>, id: string) {
+    const url = urls.get(id);
     if (!url) return;
 
     URL.revokeObjectURL(url);
-    fileUrls.delete(id);
+    urls.delete(id);
 }
 
 export function revokeAllFileUrls() {
-    fileUrls.forEach(url => URL.revokeObjectURL(url));
-    fileUrls.clear();
+    for (const urls of [fileUrls, coverUrls]) {
+        urls.forEach(url => URL.revokeObjectURL(url));
+        urls.clear();
+    }
 }

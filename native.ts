@@ -6,7 +6,7 @@
  */
 
 import { DATA_DIR } from "@main/utils/constants";
-import { execFile } from "child_process";
+import { spawn } from "child_process";
 import { createHash, randomUUID } from "crypto";
 import { desktopCapturer, IpcMainInvokeEvent, Session } from "electron";
 import { access, mkdir, readFile, rename, rm, stat, writeFile } from "fs/promises";
@@ -31,6 +31,7 @@ interface ToolBuild {
 const LIBRARY_DIR = join(DATA_DIR, "SoundPanel");
 const FILES_DIR = join(LIBRARY_DIR, "files");
 const INDEX_FILE = join(LIBRARY_DIR, "library.json");
+const COVERS_DIR = join(LIBRARY_DIR, "covers");
 const TOOLS_DIR = join(LIBRARY_DIR, "tools");
 const DOWNLOADS_DIR = join(LIBRARY_DIR, "downloads");
 
@@ -59,14 +60,27 @@ let pendingSource: { id: string; audio: boolean; } | null = null;
 const sessionsWithHandler = new WeakSet<Session>();
 let toolsReady: Promise<void> | undefined;
 let ytDlpUpdated = false;
+let youTubeProgress: number | null = null;
 
-function libraryFilePath(id: string) {
-    // Ids are UUIDs; anything else could point outside the library folder
+// Ids are UUIDs; anything else could point outside the library folder
+function checkId(id: string) {
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) throw new Error("Invalid library file id");
-    return join(FILES_DIR, id);
+    return id;
 }
 
+const libraryFilePath = (id: string) => join(FILES_DIR, checkId(id));
+const coverFilePath = (id: string) => join(COVERS_DIR, `${checkId(id)}.jpg`);
+
 const isMissing = (err: unknown) => (err as NodeJS.ErrnoException)?.code === "ENOENT";
+
+async function readIfExists(path: string) {
+    try {
+        return new Uint8Array(await readFile(path));
+    } catch (err) {
+        if (isMissing(err)) return null;
+        throw err;
+    }
+}
 
 async function readIndexFile(): Promise<LibraryItem[]> {
     try {
@@ -104,16 +118,16 @@ export async function writeLibraryFile(_: IpcMainInvokeEvent, id: string, data: 
 }
 
 export async function readLibraryFile(_: IpcMainInvokeEvent, id: string) {
-    try {
-        return new Uint8Array(await readFile(libraryFilePath(id)));
-    } catch (err) {
-        if (isMissing(err)) return null;
-        throw err;
-    }
+    return readIfExists(libraryFilePath(id));
+}
+
+export async function readLibraryCover(_: IpcMainInvokeEvent, id: string) {
+    return readIfExists(coverFilePath(id));
 }
 
 export async function deleteLibraryFile(_: IpcMainInvokeEvent, id: string) {
     await rm(libraryFilePath(id), { force: true });
+    await rm(coverFilePath(id), { force: true });
 }
 
 // Discord's CDN sends broken CORS headers to PTB and Canary, which doesn't matter out here
@@ -251,29 +265,68 @@ function ytDlpError(stderr: string) {
     return line?.replace(/^ERROR:\s*(\[[^\]]+\]\s*[\w-]+:\s*)?/, "");
 }
 
-function runYtDlp(path: string, args: string[]) {
+// Resolves with everything yt-dlp printed, and hands over each printed line as it arrives
+function runYtDlp(path: string, args: string[], onLine?: (line: string) => void) {
     return new Promise<string>((done, fail) => {
-        execFile(path, args, {
-            timeout: 5 * 60 * 1000,
-            maxBuffer: 1024 * 1024,
+        const child = spawn(path, args, {
             windowsHide: true,
             // yt-dlp is a Python program; this keeps titles in other alphabets intact
             env: { ...process.env, PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" }
-        }, (err, stdout, stderr) => err ? fail(new Error(ytDlpError(stderr) ?? err.message)) : done(stdout));
+        });
+        const timeout = setTimeout(() => child.kill(), 5 * 60 * 1000);
+        let stdout = "";
+        let stderr = "";
+        let partialLine = "";
+
+        child.stdout.setEncoding("utf8").on("data", (chunk: string) => {
+            stdout += chunk;
+            const lines = (partialLine + chunk).split(/\r?\n/);
+            partialLine = lines.pop()!;
+            if (onLine) lines.forEach(onLine);
+        });
+        child.stderr.setEncoding("utf8").on("data", (chunk: string) => { stderr += chunk; });
+
+        child.on("error", err => {
+            clearTimeout(timeout);
+            fail(err);
+        });
+        child.on("close", code => {
+            clearTimeout(timeout);
+            if (code === 0) done(stdout);
+            else fail(new Error(ytDlpError(stderr) ?? `yt-dlp stopped with exit code ${code}`));
+        });
     });
 }
 
 // YouTube changes often break older yt-dlp versions, so update once per session before giving up
-async function runYtDlpUpToDate(path: string, args: string[]) {
+async function runYtDlpUpToDate(path: string, args: string[], onLine?: (line: string) => void) {
     try {
-        return await runYtDlp(path, args);
+        return await runYtDlp(path, args, onLine);
     } catch (err) {
         if (ytDlpUpdated) throw err;
 
         ytDlpUpdated = true;
         await runYtDlp(path, ["--update"]).catch(() => { });
-        return runYtDlp(path, args);
+        return runYtDlp(path, args, onLine);
     }
+}
+
+// YouTube's medium thumbnail is 16:9 without black bars, so it crops cleanly to a square cover.
+// A missing cover shouldn't cost the song, so failures only mean no cover.
+async function saveCover(videoId: string, id: string) {
+    try {
+        const image = await download(`https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`);
+        await mkdir(COVERS_DIR, { recursive: true });
+        await writeFile(coverFilePath(id), image);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+// From 0 to 1 while a YouTube download runs, null otherwise
+export function getYouTubeProgress(_: IpcMainInvokeEvent) {
+    return youTubeProgress;
 }
 
 export async function downloadYouTubeAudio(_: IpcMainInvokeEvent, link: string) {
@@ -284,6 +337,7 @@ export async function downloadYouTubeAudio(_: IpcMainInvokeEvent, link: string) 
     const { ytDlp, quickJs } = getTools();
     const folder = join(DOWNLOADS_DIR, randomUUID());
     await mkdir(folder, { recursive: true });
+    youTubeProgress = 0;
 
     try {
         const output = await runYtDlpUpToDate(ytDlp, [
@@ -296,15 +350,21 @@ export async function downloadYouTubeAudio(_: IpcMainInvokeEvent, link: string) 
             "--max-filesize", "100M",
             "--match-filters", "duration <= 3600",
             "--output", join(folder, "audio.%(ext)s"),
-            "--print", "after_move:%(.{title,duration,ext,filepath})j",
+            "--progress",
+            "--newline",
+            "--progress-template", "download:progress %(progress.downloaded_bytes)s %(progress.total_bytes,progress.total_bytes_estimate)s",
+            "--print", "after_move:%(.{title,channel,duration,ext,filepath})j",
             "--", `https://www.youtube.com/watch?v=${videoId}`
-        ]);
+        ], line => {
+            const progress = /^progress (\d+) (\d+)/.exec(line);
+            if (progress) youTubeProgress = Math.min(Number(progress[1]) / Number(progress[2]), 1);
+        });
 
-        // yt-dlp prints nothing when it skips a video for being too long or too big
-        const line = output.trim().split(/\r?\n/).pop();
+        // yt-dlp prints no details when it skips a video for being too long or too big
+        const line = output.trim().split(/\r?\n/).filter(l => l.startsWith("{")).pop();
         if (!line) throw new Error("Only videos up to an hour long and 100 MB can be added");
 
-        const info: { title?: string; duration?: number; ext?: string; filepath?: string; } = JSON.parse(line);
+        const info: { title?: string; channel?: string; duration?: number; ext?: string; filepath?: string; } = JSON.parse(line);
         if (!info.filepath || dirname(resolve(info.filepath)) !== resolve(folder)) throw new Error("yt-dlp saved the audio somewhere unexpected");
 
         const id = randomUUID();
@@ -314,11 +374,15 @@ export async function downloadYouTubeAudio(_: IpcMainInvokeEvent, link: string) 
         return {
             id,
             name: info.title || "YouTube audio",
+            artist: info.channel,
+            youtubeId: videoId,
+            cover: await saveCover(videoId, id),
             mimeType: AUDIO_TYPES[info.ext ?? ""] ?? "audio/webm",
             size: (await stat(libraryFilePath(id))).size,
             duration: info.duration ?? 0
         };
     } finally {
+        youTubeProgress = null;
         await rm(folder, { recursive: true, force: true });
     }
 }

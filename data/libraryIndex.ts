@@ -18,6 +18,10 @@ export interface LibraryItem {
     duration: number;
     volume: number;
     addedAt: number;
+    // Songs added from YouTube also know their channel, video and cover
+    artist?: string;
+    youtubeId?: string;
+    cover?: boolean;
 }
 
 export type LibraryPatch = Partial<Pick<LibraryItem, "name" | "volume" | "kind">>;

@@ -76,7 +76,7 @@ Open **Music**, click **Add Music** or drop files, then click a track. You can s
 
 <img src="images/music.png" alt="Music tab" width="420">
 
-To add a song from YouTube, copy its link and paste it into the search box. The button next to it turns into **Add from YouTube**. Click it, and the plugin downloads the song into your music and plays it. The first time, it also downloads the two tools it needs, about 24 MB.
+To add a song from YouTube, copy its link and paste it into the search box. The button next to it turns into **Add from YouTube** and shows how far the download is once you click it. The song lands in your music with its cover and channel name, and starts playing. Right-click it to open the video on YouTube. The first time, the plugin also downloads the two tools it needs, about 24 MB.
 
 <img src="images/youtube-link.png" alt="A YouTube link pasted into the Music tab" width="420">
 

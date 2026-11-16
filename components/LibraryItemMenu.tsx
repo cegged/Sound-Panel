@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { DeleteIcon, PencilIcon } from "@components/Icons";
+import { DeleteIcon, OpenExternalIcon, PencilIcon } from "@components/Icons";
 import { debounce } from "@shared/debounce";
 import { ContextMenuApi, Menu } from "@webpack/common";
 
@@ -46,6 +46,14 @@ function LibraryItemMenu({ item, onRename }: { item: LibraryItem; onRename(): vo
                     label="Play Only For Me"
                     icon={HeadphonesIcon}
                     action={() => play(true)}
+                />
+            )}
+            {item.youtubeId && (
+                <Menu.MenuItem
+                    id="vc-soundpanel-open-youtube"
+                    label="Open on YouTube"
+                    icon={OpenExternalIcon}
+                    action={() => VencordNative.native.openExternal(`https://www.youtube.com/watch?v=${item.youtubeId}`)}
                 />
             )}
             <Menu.MenuSeparator />

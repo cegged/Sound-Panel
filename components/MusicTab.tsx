@@ -18,7 +18,17 @@ import {
     toggleMusic,
     toggleShuffle
 } from "../audio/player";
-import { addFromYouTube, isYouTubeLink, LibraryItem, updateItem, useLibrary, useYouTubeStatus, type YouTubeStatus } from "../data/library";
+import {
+    addFromYouTube,
+    isYouTubeLink,
+    LibraryItem,
+    updateItem,
+    useCoverUrl,
+    useLibrary,
+    useYouTubeProgress,
+    useYouTubeStatus,
+    type YouTubeStatus
+} from "../data/library";
 import { settings } from "../settings";
 import { showError } from "../utils/logger";
 import { Native } from "../utils/native";
@@ -67,17 +77,20 @@ function NowPlaying({ tracks }: { tracks: LibraryItem[]; }) {
     const playing = useStore(musicStore, s => s.playing);
     const { repeatMode, shuffle, musicVolume } = settings.use(["repeatMode", "shuffle", "musicVolume"]);
     const current = tracks.find(track => track.id === currentId);
+    const cover = useCoverUrl(current);
 
     return (
         <div className={cl("now-playing")} style={current && { "--vc-soundpanel-hue": hueOf(current.id) } as CSSProperties}>
             <div className={cl("now-playing-info")}>
                 <div className={cl("now-playing-art", { "now-playing-art-active": playing })}>
-                    <MusicNoteIcon size={24} />
+                    {cover ? <img className={cl("cover")} src={cover} alt="" /> : <MusicNoteIcon size={24} />}
                 </div>
                 <div className={cl("now-playing-text")}>
                     <div className={cl("now-playing-title")}>{current?.name ?? "Nothing playing"}</div>
                     <div className={cl("now-playing-subtitle")}>
-                        {current ? `${tracks.indexOf(current) + 1} of ${tracks.length}` : `${tracks.length} track${tracks.length === 1 ? "" : "s"} in your library`}
+                        {current
+                            ? [current.artist, `${tracks.indexOf(current) + 1} of ${tracks.length}`].filter(Boolean).join(" · ")
+                            : `${tracks.length} track${tracks.length === 1 ? "" : "s"} in your library`}
                     </div>
                 </div>
             </div>
@@ -130,6 +143,18 @@ function NowPlaying({ tracks }: { tracks: LibraryItem[]; }) {
     );
 }
 
+// The YouTube cover when there is one, otherwise the track's own color
+function TrackCover({ track }: { track: LibraryItem; }) {
+    const cover = useCoverUrl(track);
+    if (cover) return <img className={cl("track-cover")} src={cover} alt="" />;
+
+    return (
+        <span className={cl("track-cover", "track-cover-empty")} style={{ "--vc-soundpanel-hue": hueOf(track.id) } as CSSProperties}>
+            <MusicNoteIcon size={14} />
+        </span>
+    );
+}
+
 function TrackRow({ track, index, active, playing, editing, setEditing }: {
     track: LibraryItem;
     index: number;
@@ -155,6 +180,7 @@ function TrackRow({ track, index, active, playing, editing, setEditing }: {
             <span className={cl("track-index")}>
                 {active && playing ? <span className={cl("equalizer")}><i /><i /><i /></span> : index + 1}
             </span>
+            <TrackCover track={track} />
             {editing ? (
                 <RenameInput
                     initialValue={track.name}
@@ -164,7 +190,10 @@ function TrackRow({ track, index, active, playing, editing, setEditing }: {
                     }}
                 />
             ) : (
-                <span className={cl("track-name")}>{track.name}</span>
+                <span className={cl("track-text")}>
+                    <span className={cl("track-name")}>{track.name}</span>
+                    {track.artist && <span className={cl("track-artist")}>{track.artist}</span>}
+                </span>
             )}
             <span className={cl("track-duration")}>{formatTime(track.duration)}</span>
         </div>
@@ -182,6 +211,7 @@ export function MusicTab() {
     const currentId = useStore(musicStore, s => s.currentId);
     const playing = useStore(musicStore, s => s.playing);
     const youTubeStatus = useYouTubeStatus();
+    const youTubeProgress = useYouTubeProgress();
     const [query, setQuery] = useState("");
     const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -220,7 +250,10 @@ export function MusicTab() {
                     {pastedLink || youTubeStatus !== "idle" ? (
                         <button type="submit" className={cl("action-button", "primary")} disabled={youTubeStatus !== "idle"}>
                             <LinkIcon width={16} height={16} />
-                            <span>{YOUTUBE_LABELS[youTubeStatus]}</span>
+                            <span>
+                                {YOUTUBE_LABELS[youTubeStatus]}
+                                {youTubeStatus === "downloading" && youTubeProgress !== null && ` ${Math.round(youTubeProgress * 100)}%`}
+                            </span>
                         </button>
                     ) : (
                         <UploadButton kind="music" label="Add Music" />
