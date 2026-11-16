@@ -55,6 +55,8 @@ The **Soundboard** tab has your favorites first, then each server, then Discord'
 
 Right-click a sound to choose how it plays, preview it only for yourself, add it to your favorites, make it your [join sound](#5-set-a-join-sound) or save it to **My Sounds** or **Music**. These favorites are the same as in Discord's own soundboard.
 
+<img src="images/sound-menu.png" alt="Menu of a soundboard sound" width="420">
+
 ### 3. Add your own sounds
 
 Open **My Sounds**, click **Add** or drop audio files onto the panel, then click a sound to play it. Your newest sounds come first, and your favorites sit above them.
@@ -62,8 +64,6 @@ Open **My Sounds**, click **Add** or drop audio files onto the panel, then click
 <img src="images/my-sounds.png" alt="My Sounds tab" width="420">
 
 Right-click a sound for more:
-
-<img src="images/sound-menu.png" alt="Menu of a sound" width="420">
 
 | Option | What it does |
 |---|---|
