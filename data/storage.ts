@@ -25,8 +25,6 @@ const fileKey = (id: string) => `file:${id}`;
 let idbStore: UseStore | undefined;
 const db = () => idbStore ??= createIdbStore("SoundPanelData", "SoundPanelStore");
 
-// The browser keeps the library in IndexedDB. Each Discord desktop app has its own IndexedDB though,
-// so there it's only used to migrate libraries from before they were shared on disk
 const idbStorage: LibraryStorage = {
     async readIndex() {
         return await get<LibraryItem[]>(INDEX_KEY, db()) ?? [];

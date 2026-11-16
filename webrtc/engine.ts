@@ -9,20 +9,14 @@ import { settings } from "../settings";
 
 let webrtc = !IS_DISCORD_DESKTOP;
 
-// Discord picks its voice engine once at startup, so a changed setting only counts after a restart
 export function detectVoiceEngine() {
     webrtc = !IS_DISCORD_DESKTOP || settings.store.webrtcEngine;
 }
 
-// The browser and Vesktop always use the WebRTC engine
 export const usesWebRTCEngine = () => webrtc;
 
-// The desktop app needs extra help in WebRTC mode: screen sharing, codecs and video quality
 export const usesDesktopWebRTC = () => IS_DISCORD_DESKTOP && webrtc;
 
-// The WebRTC engine ignores "Automatically determine input sensitivity" and uses the hidden slider value instead.
-// That's -60 dB unless you moved it, low enough for background noise to count as speech, so you show as speaking
-// all the time. The engine's own default works much better.
 const AUTO_SENSITIVITY_THRESHOLD = -40;
 
 export function getVoiceActivityThreshold({ vadThreshold, vadAutoThreshold }: { vadThreshold: number; vadAutoThreshold?: boolean; }) {

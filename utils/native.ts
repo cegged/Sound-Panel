@@ -7,5 +7,4 @@
 
 import type { PluginNative } from "@utils/types";
 
-// Undefined on the web, where there is no main process
 export const Native = VencordNative.pluginHelpers.SoundPanel as PluginNative<typeof import("../native")> | undefined;

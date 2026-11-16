@@ -5,8 +5,6 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-// native.ts uses this in the main process too, so no renderer imports in here
-
 export type LibraryKind = "sound" | "music";
 
 export interface LibraryItem {
@@ -18,11 +16,9 @@ export interface LibraryItem {
     duration: number;
     volume: number;
     addedAt: number;
-    // Songs added from YouTube also know their channel, video and cover
     artist?: string;
     youtubeId?: string;
     cover?: boolean;
-    // Favorites sit at the top of My Sounds
     favorite?: boolean;
 }
 

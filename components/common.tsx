@@ -18,7 +18,6 @@ import { UploadIcon } from "./icons";
 
 export const cl = classNameFactory("vc-soundpanel-");
 
-// The panel's menus wear its glass, though Discord draws them outside the panel
 export function useGlassMenu() {
     const { transparency } = settings.use(["transparency"]);
 
@@ -159,7 +158,6 @@ export function RenameInput({ initialValue, onDone }: { initialValue: string; on
     );
 }
 
-// Which sections are folded away, by id
 export function useCollapsedGroups() {
     const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
 
@@ -172,7 +170,6 @@ export function useCollapsedGroups() {
     return [collapsed, toggle] as const;
 }
 
-// A section's heading, which also folds the section away
 export function GroupHeader({ icon, name, count, collapsed, onToggle }: {
     icon: ReactNode;
     name: string;

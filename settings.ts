@@ -14,15 +14,12 @@ import { applyMusicVolume } from "./audio/player";
 export type PanelTab = "server" | "sounds" | "music";
 export type RepeatMode = "off" | "all" | "one";
 
-// What plays when you join a voice channel: one of your sounds, or a sound from Discord's soundboard
 export type JoinSound =
     | { type: "library"; id: string; }
     | { type: "soundboard"; soundId: string; guildId: string; };
 
-// See-through enough that the chat behind the panel stays readable, and the panel's own text clear
 export const DEFAULT_TRANSPARENCY = 65;
 
-// How opaque the glass is: solid at 0% transparency, and a fifth of it left at 100%
 export const glassOpacity = (transparency: number) => 100 - 0.8 * transparency;
 
 export const settings = definePluginSettings({
@@ -109,7 +106,6 @@ export const settings = definePluginSettings({
         default: false,
         hidden: true
     },
-    // Chosen from a sound's right-click menu
     joinSound: {
         type: OptionType.CUSTOM,
         default: null as JoinSound | null

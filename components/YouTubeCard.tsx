@@ -14,14 +14,12 @@ import { showError } from "../utils/logger";
 import { cl } from "./common";
 import { MusicNoteIcon, PlayIcon, SaveIcon } from "./icons";
 
-// What the card says when YouTube has no details for the video
 const PROBLEMS = {
     missing: { title: "This video doesn't exist", detail: "It may have been deleted. Check the link" },
     restricted: { title: "No preview for this video", detail: "It may be private, or its owner keeps it on YouTube only" },
     unreachable: { title: "Couldn't load the preview", detail: "You can still try to download it" }
 };
 
-// The thumbnail arrives as bytes, since Discord doesn't load images straight from YouTube
 function useThumbnailUrl(thumbnail: Uint8Array<ArrayBuffer> | null | undefined) {
     const [url, setUrl] = useState<string | null>(null);
 
@@ -39,13 +37,10 @@ function useThumbnailUrl(thumbnail: Uint8Array<ArrayBuffer> | null | undefined) 
     return url;
 }
 
-// A YouTube link in the search box: what it points to, and a button to download it. Nothing downloads before that.
 export function YouTubeCard({ videoId, saved, pending, busy, onDownload, onClose }: {
     videoId: string;
-    // The song when it's in the library already, or downloading
     saved?: LibraryItem;
     pending?: PendingSong;
-    // Why the button waits, while the download starts
     busy: string | null;
     onDownload(): void;
     onClose(): void;
@@ -74,7 +69,6 @@ export function YouTubeCard({ videoId, saved, pending, busy, onDownload, onClose
         : pending ? downloadLabel(pending)
             : video?.found ? video.channel : problem?.detail;
 
-    // The button plays the song instead when there's nothing left to download
     const play = () => {
         if (saved) {
             (saved.kind === "music" ? playTrack(saved.id) : playLibrarySound(saved))
@@ -95,7 +89,6 @@ export function YouTubeCard({ videoId, saved, pending, busy, onDownload, onClose
                 {detail && <div className={cl("youtube-detail")}>{detail}</div>}
                 <div className={cl("youtube-actions")}>
                     {saved || pending ? (
-                        // Enter in the search box presses this button too
                         <button type="submit" className={cl("action-button", "primary")} onClick={play}>
                             <PlayIcon size={16} />
                             <span>Play</span>

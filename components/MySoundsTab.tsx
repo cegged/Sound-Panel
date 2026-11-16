@@ -28,7 +28,6 @@ import {
 import { JoinSoundIcon, StarIcon, StopIcon, WaveformIcon } from "./icons";
 import { openLibraryItemMenu } from "./LibraryItemMenu";
 
-// Sound effects are short, so "0.8s" says more than "0:00"
 const clipLength = (seconds: number) => seconds < 60 ? `${seconds.toFixed(1)}s` : formatTime(seconds);
 
 function SoundTile({ item, playing, joinSound, editing, setEditing }: {
@@ -41,7 +40,6 @@ function SoundTile({ item, playing, joinSound, editing, setEditing }: {
     const onClick = () => {
         if (editing) return;
 
-        // With overlap on, every click starts another instance; otherwise a click on a playing sound stops it
         if (playing && !settings.store.allowOverlap) {
             stopClip(item.id);
             return;
@@ -91,7 +89,6 @@ export function MySoundsTab() {
     const visible = items.filter(item => matchesQuery(item.name, query));
     const anyPlaying = items.some(item => playing.includes(item.id));
 
-    // Favorites come first, and then the other sounds get a heading of their own
     const favorites = visible.filter(item => item.favorite);
     const groups = favorites.length === 0 ? null : [
         { id: "favorites", name: "Favorites", items: favorites },

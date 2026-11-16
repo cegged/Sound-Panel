@@ -132,7 +132,6 @@ function SourcePickerModal({ modalProps, audioRequested, onPick }: {
     );
 }
 
-// Resolves with the picked source, or null if the picker was closed
 export function pickScreenSource(audioRequested: boolean) {
     return new Promise<ScreenShareChoice | null>(resolve => {
         let settled = false;

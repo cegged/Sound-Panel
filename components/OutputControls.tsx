@@ -27,7 +27,6 @@ export interface Status {
 
 const openSettings = () => openPluginModal(plugins.SoundPanel);
 
-// Whether the call hears what the panel plays, and if not, why
 export function useTransmitStatus(channel: Channel | undefined): Status {
     const mixing = useStore(mixerStore, s => s.activeMixes > 0);
     const muted = useStateFromStores([MediaEngineStore], isSelfMuted);

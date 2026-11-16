@@ -27,7 +27,6 @@ function LibraryItemMenu({ item, onRename }: { item: LibraryItem; onRename(): vo
     const { joinSound } = settings.use(["joinSound"]);
     const glass = useGlassMenu();
     const isSound = item.kind === "sound";
-    // A join sound moved to Music can still be removed from here
     const isJoinSound = isLibraryJoinSound(joinSound, item.id);
     const moveTarget = isSound ? "music" : "sound";
 
@@ -119,7 +118,6 @@ function LibraryItemMenu({ item, onRename }: { item: LibraryItem; onRename(): vo
                 icon={DeleteIcon}
                 action={() => {
                     release();
-                    // Nothing would be left to play when you join a channel
                     if (isJoinSound) settings.store.joinSound = null;
                     removeItem(item.id).catch(err => showError(`Couldn't delete "${item.name}"`, err));
                 }}

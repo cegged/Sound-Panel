@@ -15,7 +15,6 @@ import { migrateLegacyLibrary, storage } from "./storage";
 
 export type { LibraryItem, LibraryKind } from "./libraryIndex";
 
-// A YouTube song still downloading: it shows in the playlist with its progress until it's saved
 export interface PendingSong {
     id: string;
     youtubeId: string;
@@ -24,14 +23,12 @@ export interface PendingSong {
     cover: boolean;
     duration: number;
     progress: number | null;
-    // How to play it while it downloads, once yt-dlp has picked the audio
     streamType: string | null;
 }
 
 const AUDIO_EXTENSIONS = /\.(mp3|wav|ogg|oga|opus|m4a|aac|flac|webm|weba)$/i;
 
 const libraryStore = createStore({ loaded: false, items: [] as LibraryItem[] });
-// Outside the panel, so closing and reopening it keeps showing downloads that are still running
 const pendingStore = createStore({ songs: [] as PendingSong[], preparing: false });
 const fileUrls = new Map<string, string>();
 const coverUrls = new Map<string, string>();
@@ -50,7 +47,6 @@ function loadLibrary() {
         });
 }
 
-// Also picks up changes made from another Discord app that shares the library
 export async function refreshLibrary() {
     if (!libraryStore.get().loaded) return loadLibrary();
 
@@ -61,7 +57,6 @@ export async function refreshLibrary() {
     }
 }
 
-// Newest first, in the lists and for next and previous
 const newestFirst = (a: LibraryItem, b: LibraryItem) => b.addedAt - a.addedAt;
 const itemsOfKind = (items: LibraryItem[], kind: LibraryKind) => items.filter(item => item.kind === kind).sort(newestFirst);
 
@@ -71,7 +66,6 @@ export function getItems(kind: LibraryKind) {
 
 export const getItem = (id: string) => libraryStore.get().items.find(item => item.id === id);
 
-// The library's copy of a YouTube video, in Music or My Sounds
 export const useLibrarySong = (videoId: string | null) =>
     useStore(libraryStore, s => videoId ? s.items.find(item => item.youtubeId === videoId) : undefined);
 
@@ -145,7 +139,6 @@ export function removePendingSong(id: string) {
     pendingStore.set({ songs: pendingStore.get().songs.filter(song => song.id !== id) });
 }
 
-// yt-dlp and its JavaScript runtime are downloaded the first time only
 export async function prepareYouTube() {
     if (!Native || await Native.hasYouTubeTools()) return;
 
@@ -157,7 +150,6 @@ export async function prepareYouTube() {
     }
 }
 
-// Errors from the main process arrive as "Error invoking remote method '...': Error: <reason>"
 export const nativeReason = (err: unknown) => String((err as Error)?.message ?? err).replace(/^Error invoking remote method '[^']+': (\w*Error: )?/, "");
 
 function loadCover(id: string) {
@@ -178,7 +170,6 @@ function loadCover(id: string) {
     return load;
 }
 
-// The song's cover as an image URL, or null while it loads and for songs without one
 export function useCoverUrl(item: { id: string; cover?: boolean; } | undefined) {
     const id = item?.cover ? item.id : null;
     const [, setLoaded] = useState(0);

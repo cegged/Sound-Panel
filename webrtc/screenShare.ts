@@ -11,9 +11,6 @@ import { logger, showError } from "../utils/logger";
 import { Native } from "../utils/native";
 import { pickScreenSource, type ScreenShareChoice } from "./SourcePicker";
 
-// Discord's desktop Go Live window picks screens and windows by their Electron source id, while the WebRTC engine
-// only streams what it captured through getDisplayMedia itself. This captures the picked source for the engine.
-
 interface GoLiveSource {
     desktopDescription: {
         id: string;
@@ -30,7 +27,6 @@ interface WebRTCEngine {
 
 interface CaptureOptions {
     preset?: number;
-    // Stream height, 0 meaning the source resolution
     resolution?: number;
     frameRate?: number;
     audio?: boolean;
@@ -43,9 +39,7 @@ interface CapturedInput extends CaptureOptions {
 const PRESET_DOCUMENTS = 2;
 
 let originalGetDisplayMedia: MediaDevices["getDisplayMedia"] | null = null;
-// Set while capturing a source Discord already picked, so getDisplayMedia skips our own picker
 let pendingCapture: ScreenShareChoice & { contentHint: string; } | null = null;
-// Engine input id -> what it was captured from, to re-capture it when the quality changes
 const capturedInputs = new Map<string, CapturedInput>();
 const capturing = new Set<string>();
 let qualityChangeTimer: ReturnType<typeof setTimeout> | undefined;
@@ -66,14 +60,12 @@ export function installScreenShareHook() {
 
         await Native!.selectScreenSource(choice.id, choice.audio);
 
-        // restrictOwnAudio leaves Discord's own playback out, so people in the call don't hear themselves
         const audio = choice.audio && constraints.audio
             ? { ...(typeof constraints.audio === "object" ? constraints.audio : {}), restrictOwnAudio: true }
             : false;
 
         const stream = await original.call(this, { ...constraints, audio } as DisplayMediaStreamOptions);
 
-        // Screen captures otherwise keep their resolution and drop frames under load, which looks choppy
         stream.getVideoTracks().forEach(track => track.contentHint = contentHint);
         return stream;
     };
@@ -86,7 +78,6 @@ export function uninstallScreenShareHook() {
     originalGetDisplayMedia = null;
 }
 
-// The engine reads these back to configure the encoder, so capture and encoding match
 function getCaptureConstraints({ resolution, frameRate }: CaptureOptions) {
     const height = resolution || Math.round(screen.height * devicePixelRatio);
     const width = Math.round(height * screen.width / screen.height);
@@ -122,8 +113,6 @@ function reportCaptureError(err: unknown) {
     showError("Couldn't capture the screen or window to stream", err);
 }
 
-// Runs before Discord creates the stream connection, like the web client does. Capturing later would add the
-// video track to a connection that's already negotiated, and the stream starts out with no video.
 export async function prepareDesktopSource<T extends { id?: string; }>(source: T, options: CaptureOptions) {
     if (!isElectronSourceId(source?.id)) return source;
 
@@ -150,8 +139,6 @@ async function recapture(engine: WebRTCEngine, source: GoLiveSource, context: st
     }
 }
 
-// Called with source ids the engine never captured: a new source (switching mid-stream),
-// or the running stream's input with new quality settings
 export function captureDesktopSource(engine: WebRTCEngine, source: GoLiveSource, context: string) {
     const { id, soundshareId, useLoopback } = source.desktopDescription;
     const { resolution, frameRate } = source.quality ?? {};
@@ -164,7 +151,6 @@ export function captureDesktopSource(engine: WebRTCEngine, source: GoLiveSource,
     const previous = capturedInputs.get(id);
     if (!previous || (resolution === previous.resolution && frameRate === previous.frameRate)) return;
 
-    // Discord sends a burst of quality changes while a stream settles; only act on the last one
     clearTimeout(qualityChangeTimer);
     qualityChangeTimer = setTimeout(() => void recapture(engine, source, context, { ...previous, resolution, frameRate }), 1500);
 }

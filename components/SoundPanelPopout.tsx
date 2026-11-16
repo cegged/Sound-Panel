@@ -22,7 +22,6 @@ import { MySoundsTab } from "./MySoundsTab";
 import { OutputControls, useTransmitStatus } from "./OutputControls";
 import { ServerSoundsTab } from "./ServerSoundsTab";
 
-// The credit next to the title opens the author's Discord profile
 const AUTHOR = { id: "453743721402466317", username: "c3g" };
 
 const TABS: { id: PanelTab; label: string; }[] = [
@@ -31,7 +30,6 @@ const TABS: { id: PanelTab; label: string; }[] = [
     { id: "music", label: "Music" }
 ];
 
-// The author's Discord account, fetched once if this Discord app hasn't seen it yet
 function useAuthor() {
     const cached = useStateFromStores([UserStore], () => UserStore.getUser(AUTHOR.id));
     const [fetched, setFetched] = useState<User | null>(null);
@@ -65,7 +63,6 @@ function AuthorCredit() {
     );
 }
 
-// The panel's transparency, changed live while the slider moves
 function TransparencyMenu() {
     const { transparency } = settings.use(["transparency"]);
     const glass = useGlassMenu();
@@ -108,8 +105,6 @@ function SoundPanelPopout({ channel }: { channel?: Channel; }) {
         void refreshLibrary();
     }, []);
 
-    // While the call hears the panel, whatever plays wears Discord's green speaking ring.
-    // The glass gets thinner as transparency goes up.
     return (
         <div
             className={cl("popout", { live, "on-air": live && isPlaying, solid: transparency === 0 })}
@@ -137,7 +132,6 @@ function SoundPanelPopout({ channel }: { channel?: Channel; }) {
                         <TransparencyIcon size={18} />
                     </button>
                 </div>
-                {/* A segmented control: the thumb slides under the chosen tab */}
                 <nav className={cl("tabs")} role="tablist" style={{ "--vc-soundpanel-tab": tabIndex } as CSSProperties}>
                     <span className={cl("tab-thumb")} aria-hidden="true" />
                     {TABS.map(({ id, label }) => (

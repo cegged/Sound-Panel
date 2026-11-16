@@ -42,7 +42,6 @@ function previewSound(sound: SoundboardSound) {
 function playSound(sound: SoundboardSound, channel: Channel | undefined, route: SoundRoute) {
     switch (route.kind) {
         case "soundboard":
-            // Discord's error says why, e.g. a missing permission
             playServerSound(sound, channel!).catch(err => showError(`Couldn't play "${sound.name}": ${err.message}`, err));
             break;
         case "microphone":
@@ -150,7 +149,6 @@ function ServerSoundTile({ sound, ctx, playing, joinSound }: { sound: Soundboard
                     type="button"
                     className={cl("tile", {
                         "tile-local": route.kind === "local",
-                        // Discord's own soundboard plays to the whole channel
                         "tile-discord": route.kind === "soundboard",
                         "tile-playing": playing || SoundboardStore.isPlayingSound(sound.soundId)
                     })}

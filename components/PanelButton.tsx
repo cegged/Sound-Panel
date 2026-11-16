@@ -15,7 +15,6 @@ import { cl } from "./common";
 import { SoundPanelIcon } from "./icons";
 import SoundPanelPopout from "./SoundPanelPopout";
 
-// Discord's own voice panel button classes, so the button matches the camera / screen share / soundboard buttons
 const PanelButtonClasses = findCssClassesLazy("button", "buttonColor", "buttonContents", "buttonIcon", "greyButtonActive", "voiceButtonsContainer");
 
 export function PanelButton({ channel }: { channel: Channel; }) {

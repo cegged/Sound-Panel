@@ -31,7 +31,6 @@ export function createStore<T extends object>(initial: T): Store<T> {
     };
 }
 
-// Only re-renders when the selected value changes, so select primitives or stored references
 export function useStore<T extends object, S>(store: Store<T>, select: (state: T) => S) {
     return React.useSyncExternalStore(store.subscribe, () => select(store.get()));
 }

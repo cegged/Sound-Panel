@@ -14,14 +14,11 @@ import { showError } from "../utils/logger";
 import { isSelfMuted, mixerStore } from "./mixer";
 import { playLibrarySound } from "./player";
 
-// Others start hearing you a moment after you connect
 const JOIN_DELAY = 500;
-// Discord opens the microphone while it connects, and your own sounds ride on it
 const MICROPHONE_WAIT = 3000;
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-// The voice channel the join sound last played in, so reconnecting to it doesn't play it again
 let joinedChannelId: string | null = null;
 
 export const isLibraryJoinSound = (joinSound: JoinSound | null, id: string) =>
@@ -46,7 +43,6 @@ async function microphoneReady() {
 }
 
 async function findSoundboardSound(soundId: string) {
-    // Discord only loads every soundboard sound once its soundboard or this panel has opened
     if (!SoundboardStore.getSoundById(soundId)) await loadSoundboardSounds();
     return SoundboardStore.getSoundById(soundId);
 }
@@ -54,9 +50,7 @@ async function findSoundboardSound(soundId: string) {
 async function playJoinSound(channelId: string, joinSound: JoinSound) {
     await sleep(JOIN_DELAY);
 
-    // Gone again, or moved on to another channel already
     if (SelectedChannelStore.getVoiceChannelId() !== channelId) return;
-    // Muted on purpose, so nobody would hear it
     if (isSelfMuted()) return;
 
     const channel = ChannelStore.getChannel(channelId);
@@ -67,7 +61,6 @@ async function playJoinSound(channelId: string, joinSound: JoinSound) {
         if (!sound) return notPlayed("the sound isn't on any of your servers anymore");
 
         let route = getSoundRoute(sound, getSoundContext(channel));
-        // It may need the microphone, which can still be opening
         if (route.kind === "local" && await microphoneReady()) route = getSoundRoute(sound, getSoundContext(channel));
 
         if (route.kind === "soundboard") return playServerSound(sound, channel);
@@ -75,7 +68,6 @@ async function playJoinSound(channelId: string, joinSound: JoinSound) {
         return notPlayed(route.reason);
     }
 
-    // The library loads when the panel first opens, which may not have happened yet
     await refreshLibrary();
     const item = getItem(joinSound.id);
     if (!item) return notPlayed("the sound was deleted");
@@ -84,13 +76,10 @@ async function playJoinSound(channelId: string, joinSound: JoinSound) {
     await playLibrarySound(item);
 }
 
-// Leaving voice means the next join plays the sound again, even in the same channel
 export function onVoiceChannelSelect({ channelId }: { channelId?: string | null; }) {
     if (!channelId) joinedChannelId = null;
 }
 
-// Plays once the connection to a server's voice channel is up. Reconnecting to the same channel, calls outside
-// servers and the separate connection a stream opens don't count.
 export function onRtcConnectionState({ state, context }: { state?: string; context?: string; }) {
     if (state !== "RTC_CONNECTED" || (context && context !== "default")) return;
 

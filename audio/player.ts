@@ -31,10 +31,8 @@ export const musicStore = createStore({
 let musicAudio: HTMLAudioElement | null = null;
 let musicSource: MediaElementAudioSourceNode | null = null;
 let musicGain: GainNode | null = null;
-// A track playing while its audio still arrives, like a YouTube song that's downloading
 let stream: { id: string; stopped: boolean; } | null = null;
 
-// Hands over a track's audio from offset onwards; done once nothing more will come after these bytes
 type ReadAudio = (offset: number) => Promise<{ bytes: Uint8Array<ArrayBuffer> | null; done: boolean; }>;
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -62,7 +60,6 @@ function routeThroughMixer(audio: HTMLAudioElement, volume: number) {
     };
 }
 
-// Skips the audio graph, which would need CORS headers that Discord's CDN doesn't send to PTB and Canary
 function playDirectly(audio: HTMLAudioElement, volume: number) {
     audio.volume = Math.min(1, volume * (settings.store.localVolume / 100));
     void routeToOutputDevice(audio);
@@ -153,7 +150,6 @@ export function applyMusicVolume() {
 
 export async function playTrack(id: string) {
     const audio = getMusicElement();
-    // A song playing while it downloads keeps going if this track can't be read
     const url = await getFileUrl(id);
     stopStream();
     audio.src = url;
@@ -182,8 +178,6 @@ function whenUpdated(buffer: SourceBuffer) {
     });
 }
 
-// A full buffer drops what has already played, or waits for playback to catch up with the download.
-// It holds about 8 MB, ten minutes of a YouTube song.
 async function appendAudio(session: { stopped: boolean; }, audio: HTMLAudioElement, buffer: SourceBuffer, bytes: Uint8Array<ArrayBuffer>) {
     while (!session.stopped) {
         try {
@@ -222,8 +216,6 @@ async function feedStream(session: { stopped: boolean; }, audio: HTMLAudioElemen
     }
 }
 
-// Plays a track while its audio still arrives, through a MediaSource that read() keeps filling.
-// The call hears it like any other track.
 export async function playStream(id: string, type: string, read: ReadAudio) {
     const audio = getMusicElement();
     stopStream();
@@ -242,7 +234,6 @@ export async function playStream(id: string, type: string, read: ReadAudio) {
     const buffer = source.addSourceBuffer(type);
     feedStream(session, audio, source, buffer, read).catch(err => logger.error(`Failed to stream ${id}`, err));
 
-    // Starting another track before this one has sound isn't a failure
     await audio.play().catch(err => {
         if ((err as DOMException)?.name !== "AbortError") throw err;
     });
@@ -267,7 +258,6 @@ export async function skipTrack(direction: 1 | -1, automatic = false) {
     const tracks = getItems("music");
     if (!tracks.length) return;
 
-    // Like most players, "previous" restarts the track unless it just started
     if (direction === -1 && musicAudio && musicAudio.currentTime > 3) {
         musicAudio.currentTime = 0;
         return;
@@ -280,7 +270,6 @@ export async function skipTrack(direction: 1 | -1, automatic = false) {
         do next = Math.floor(Math.random() * tracks.length);
         while (next === index);
     } else if (index === -1) {
-        // Nothing from the playlist plays, or a song still downloading, which sits above the playlist
         next = direction === 1 ? 0 : tracks.length - 1;
     } else {
         next = index + direction;
@@ -322,7 +311,6 @@ function stopMusic() {
     musicStore.set({ position: 0 });
 }
 
-// Unloads the track before it's deleted or moved out of the playlist
 export function releaseTrack(id: string) {
     if (!musicAudio || musicStore.get().currentId !== id) return;
 

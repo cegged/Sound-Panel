@@ -14,12 +14,8 @@ import { createStore } from "../utils/store";
 import { usesDesktopWebRTC } from "../webrtc/engine";
 import { upgradeCameraConstraints } from "../webrtc/quality";
 
-// sounds & music -> voiceBus -> limiter (with the microphone) -> what Discord sends
-//                -> localBus -> limiter -> your speakers
-
 export const MAX_VOICE_VOLUME = 150;
 
-// How many microphone streams currently carry our audio into a call
 export const mixerStore = createStore({ activeMixes: 0 });
 
 let context: AudioContext | null = null;
@@ -30,7 +26,6 @@ let forcingInput = false;
 
 export const isSelfMuted = () => MediaEngineStore.isSelfMute() || MediaEngineStore.isSelfDeaf();
 
-// Full-scale files at a boosted volume would clip and crackle without this
 function createLimiter(ctx: AudioContext) {
     const limiter = ctx.createDynamicsCompressor();
     limiter.threshold.value = -3;
@@ -78,9 +73,7 @@ export async function routeToOutputDevice(target: AudioContext | HTMLMediaElemen
 
     try {
         await (target as { setSinkId?(id: string): Promise<void>; }).setSinkId?.(!deviceId || deviceId === "default" ? "" : deviceId);
-    } catch {
-        // The native engine's device ids mean nothing to the browser
-    }
+    } catch { }
 }
 
 export function applyOutputDevice() {
@@ -91,7 +84,6 @@ async function mixWithMicrophone(microphone: MediaStream) {
     const ctx = getAudioContext();
     if (ctx.state !== "running") await Promise.race([ctx.resume(), sleep(500)]);
 
-    // A suspended context would send silence, so hand Discord the plain microphone instead
     if (ctx.state !== "running") {
         logger.warn("Audio context isn't running, not mixing the microphone");
         return microphone;
@@ -150,7 +142,6 @@ export function uninstallMicrophoneHook() {
     originalGetUserMedia = null;
 }
 
-// Keeps Push to Talk transmitting while our audio plays
 export function setPlaybackActive(active: boolean) {
     const { transmit, holdPushToTalk } = settings.store;
     const force = active && transmit && holdPushToTalk && MediaEngineStore.getMode() === "PUSH_TO_TALK";

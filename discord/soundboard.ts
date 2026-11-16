@@ -43,13 +43,10 @@ export interface SoundGroup {
 }
 
 export type SoundRoute =
-    // Discord's own soundboard: everyone hears it, on every client
     | { kind: "soundboard"; }
     | { kind: "microphone"; reason?: string; }
-    // Nobody else would hear it, so it's only previewed
     | { kind: "local"; reason: string; };
 
-// Everything that decides where a sound plays, gathered once per render instead of once per sound
 export interface SoundContext {
     channel?: Channel;
     muted: boolean;
@@ -62,7 +59,6 @@ export interface SoundContext {
 
 export const getSoundUrl = (soundId: string) => `https://cdn.discordapp.com/soundboard-sounds/${soundId}`;
 export const getEmojiUrl = (emojiId: string) => `https://cdn.discordapp.com/emojis/${emojiId}.webp?size=48`;
-// Discord's own artwork for unicode emoji, so sounds look the same as in its soundboard
 export const getUnicodeEmojiUrl = (emoji: string) => EmojiUtils.getURL(emoji);
 
 export async function loadSoundboardSounds() {
@@ -84,7 +80,6 @@ export function useSoundContext(channel: Channel | undefined): SoundContext {
     return { channel, muted, canUseSoundboard, canUseExternalSounds, hasNitro, micReady: transmit && mixing, preferMicrophone: serverSoundsThroughMic };
 }
 
-// The same, read once, for a sound that plays while the panel may be closed
 export function getSoundContext(channel: Channel): SoundContext {
     const { transmit, serverSoundsThroughMic } = settings.store;
 
@@ -153,12 +148,10 @@ export async function playThroughMicrophone(sound: SoundboardSound) {
     try {
         await playClip({ key: clipKey(sound), url, volume: sound.volume });
     } finally {
-        // The audio element holds on to the data while it plays
         URL.revokeObjectURL(url);
     }
 }
 
-// Discord's own favorites: the same stars as in its soundboard, saved with your account
 export function setSoundboardFavorite(soundId: string, favorite: boolean) {
     const toggle = (ids: string[] = []) => favorite ? [...ids.filter(id => id !== soundId), soundId] : ids.filter(id => id !== soundId);
 
@@ -166,14 +159,12 @@ export function setSoundboardFavorite(soundId: string, favorite: boolean) {
         "favoriteSoundboardSounds",
         (favorites: { soundIds?: string[]; orderedSoundIds?: string[]; }) => {
             favorites.soundIds = toggle(favorites.soundIds);
-            // Discord also keeps the order favorites were added in, once it has started to
             if (favorites.orderedSoundIds?.length) favorites.orderedSoundIds = toggle(favorites.orderedSoundIds);
         },
-        0 // INFREQUENT_USER_ACTION
+        0
     );
 }
 
-// The same request Discord's soundboard makes, except errors aren't swallowed
 export async function playServerSound(sound: SoundboardSound, channel: Channel) {
     const body: Record<string, string | null> = {
         sound_id: sound.soundId,

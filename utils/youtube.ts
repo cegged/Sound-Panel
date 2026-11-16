@@ -5,11 +5,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-// native.ts uses this in the main process too, so no renderer imports in here
-
 const VIDEO_ID = /^[\w-]{11}$/;
 
-// The video's id in a YouTube link (watch, youtu.be, shorts and live links, with or without https://), or null
 export function youTubeVideoId(link: string) {
     const text = link.trim();
     let url: URL;

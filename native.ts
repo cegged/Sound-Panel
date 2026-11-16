@@ -28,7 +28,6 @@ interface ToolBuild {
     quickJsHash: string;
 }
 
-// In Vencord's data folder, so Stable, PTB and Canary share one library
 const LIBRARY_DIR = join(DATA_DIR, "SoundPanel");
 const FILES_DIR = join(LIBRARY_DIR, "files");
 const INDEX_FILE = join(LIBRARY_DIR, "library.json");
@@ -39,9 +38,6 @@ const DOWNLOADS_DIR = join(LIBRARY_DIR, "downloads");
 const SOUNDBOARD_URL = /^https:\/\/cdn\.discordapp\.com\/soundboard-sounds\/\d+$/;
 const CAPTURE_TYPES: ("screen" | "window")[] = ["screen", "window"];
 
-// YouTube audio comes through yt-dlp, which needs a JavaScript runtime to solve YouTube's challenges.
-// QuickJS-NG is the smallest one it supports and stays on a version checked against GitHub's checksums.
-// yt-dlp follows its latest release instead, because YouTube keeps breaking older ones.
 const QUICKJS_VERSION = "v0.18.0";
 const TOOL_BUILDS: Record<string, ToolBuild> = {
     "win32-x64": { ytDlp: "yt-dlp.exe", quickJs: "qjs-windows-x86_64.exe", quickJsHash: "ff03398d74ea6e6bd3a8e58058f7003225abcac229d7d57775b7aaae812a49c7" },
@@ -62,11 +58,9 @@ let toolsReady: Promise<void> | undefined;
 let ytDlpUpdated = false;
 let jsRuntime: Promise<string> | undefined;
 
-// A YouTube song downloading in the background, under the id it gets in the library
 interface YouTubeDownload {
     videoId: string;
     folder: string;
-    // The audio file: in the download folder while yt-dlp writes it, in the library once it's done
     path?: string;
     preview?: { title: string; channel?: string; };
     details?: { title?: string; channel?: string; duration?: number; ext?: string; acodec?: string; };
@@ -78,10 +72,8 @@ interface YouTubeDownload {
 }
 
 const youTubeDownloads = new Map<string, YouTubeDownload>();
-// The most audio one request hands to the panel, so a long song arrives in pieces
 const MAX_CHUNK = 1024 * 1024;
 
-// Ids are UUIDs; anything else could point outside the library folder
 function checkId(id: string) {
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) throw new Error("Invalid library file id");
     return id;
@@ -119,7 +111,6 @@ export function changeLibraryIndex(_: IpcMainInvokeEvent, change: IndexChange) {
     return changeIndex(change);
 }
 
-// One change at a time, written through a temp file so the index is never left half written
 function changeIndex(change: IndexChange) {
     const task = indexQueue.then(async () => {
         const items = applyIndexChange(await readIndexFile(), change);
@@ -153,7 +144,6 @@ export async function deleteLibraryFile(_: IpcMainInvokeEvent, id: string) {
     await rm(coverFilePath(id), { force: true });
 }
 
-// Discord's CDN sends broken CORS headers to PTB and Canary, which doesn't matter out here
 export async function downloadSoundboardSound(_: IpcMainInvokeEvent, url: string) {
     if (!SOUNDBOARD_URL.test(url)) throw new Error("Only Discord soundboard sounds can be downloaded");
 
@@ -181,7 +171,6 @@ export async function getScreenSources(_: IpcMainInvokeEvent): Promise<ScreenSou
     }));
 }
 
-// Electron only allows getDisplayMedia through a request handler, which gets the source picked for this call
 export function selectScreenSource(event: IpcMainInvokeEvent, id: string, audio: boolean) {
     pendingSource = { id, audio };
 
@@ -193,7 +182,6 @@ export function selectScreenSource(event: IpcMainInvokeEvent, id: string, audio:
         const choice = pendingSource;
         pendingSource = null;
 
-        // Denying makes getDisplayMedia reject like a cancelled browser prompt
         if (!choice) return callback({});
 
         desktopCapturer.getSources({ types: CAPTURE_TYPES })
@@ -220,7 +208,6 @@ async function download(url: string) {
     return Buffer.from(await res.arrayBuffer());
 }
 
-// Saved under a temp name first, so a cut-off download never counts as installed
 async function installTool(path: string, data: Buffer, sha256: string) {
     if (createHash("sha256").update(data).digest("hex") !== sha256) throw new Error(`${basename(path)} doesn't match its checksum`);
 
@@ -266,18 +253,15 @@ export function prepareYouTubeTools(_: IpcMainInvokeEvent) {
     return prepareTools();
 }
 
-// yt-dlp reports problems as "ERROR: [youtube] <video id>: <reason>"
 function ytDlpError(stderr: string) {
     const line = stderr.split(/\r?\n/).filter(l => l.startsWith("ERROR:")).pop();
     return line?.replace(/^ERROR:\s*(\[[^\]]+\]\s*[\w-]+:\s*)?/, "");
 }
 
-// Resolves with everything yt-dlp printed, and hands over each printed line as it arrives
 function runYtDlp(path: string, args: string[], onLine?: (line: string) => void) {
     return new Promise<string>((done, fail) => {
         const child = spawn(path, args, {
             windowsHide: true,
-            // yt-dlp is a Python program; this keeps titles in other alphabets intact
             env: { ...process.env, PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" }
         });
         const timeout = setTimeout(() => child.kill(), 5 * 60 * 1000);
@@ -305,7 +289,6 @@ function runYtDlp(path: string, args: string[], onLine?: (line: string) => void)
     });
 }
 
-// YouTube changes often break older yt-dlp versions, so update once per session before giving up
 async function runYtDlpUpToDate(path: string, args: string[], onLine?: (line: string) => void) {
     try {
         return await runYtDlp(path, args, onLine);
@@ -318,10 +301,8 @@ async function runYtDlpUpToDate(path: string, args: string[], onLine?: (line: st
     }
 }
 
-// YouTube's medium thumbnail is 16:9 without black bars, so it crops cleanly to a square cover
 const thumbnailUrl = (videoId: string) => `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
 
-// A missing cover shouldn't cost the song, so failures only mean no cover
 async function saveCover(videoId: string, id: string) {
     try {
         const image = await download(thumbnailUrl(videoId));
@@ -333,8 +314,6 @@ async function saveCover(videoId: string, id: string) {
     }
 }
 
-// Node.js finds a YouTube video about 3 seconds sooner than QuickJS, but runs YouTube's code with less
-// isolation. Without Node.js 20 or newer on the PATH, QuickJS does it.
 function getJsRuntime(quickJs: string) {
     return jsRuntime ??= new Promise(resolve => {
         execFile("node", ["--version"], { windowsHide: true, timeout: 5000 }, (err, stdout) => {
@@ -346,10 +325,8 @@ function getJsRuntime(quickJs: string) {
 
 export type VideoLookup =
     | { found: true; title: string; channel?: string; }
-    // Missing: deleted or made up. Restricted: private, or its owner doesn't allow it on other sites.
     | { found: false; reason: "missing" | "restricted" | "unreachable"; };
 
-// YouTube's oEmbed answers in a fifth of a second, long before yt-dlp has found the video
 async function lookUpVideo(videoId: string): Promise<VideoLookup> {
     try {
         const video = encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`);
@@ -365,7 +342,6 @@ async function lookUpVideo(videoId: string): Promise<VideoLookup> {
     }
 }
 
-// What a link points to before anything downloads: the video's title, channel and thumbnail
 export async function getYouTubePreview(_: IpcMainInvokeEvent, link: string) {
     const videoId = youTubeVideoId(link);
     if (!videoId) throw new Error("That isn't a link to a YouTube video");
@@ -378,13 +354,11 @@ export async function getYouTubePreview(_: IpcMainInvokeEvent, link: string) {
     return { videoId, video, thumbnail };
 }
 
-// The bytes of a file from offset onwards, or null when there are none yet
 async function readChunk(path: string, offset: number) {
     let handle: Awaited<ReturnType<typeof open>>;
     try {
         handle = await open(path, "r");
     } catch (err) {
-        // Not written yet, or just moved into the library
         if (isMissing(err)) return null;
         throw err;
     }
@@ -421,12 +395,10 @@ async function runYouTubeDownload(id: string, download: YouTubeDownload) {
             "--cache-dir", join(TOOLS_DIR, "cache"),
             "--no-js-runtimes",
             "--js-runtimes", await getJsRuntime(quickJs),
-            // Stereo Opus first: it plays while it downloads, and leaves out the large surround tracks some videos have
             "--format", "bestaudio[acodec=opus]/bestaudio[ext=m4a][audio_channels<=2]/bestaudio[audio_channels<=2]/bestaudio",
             "--max-filesize", "100M",
             "--match-filters", "duration <= 3600",
             "--output", join(download.folder, "audio.%(ext)s"),
-            // Written under its final name from the first byte, so the panel can play it while it grows
             "--no-part",
             "--progress",
             "--newline",
@@ -444,7 +416,6 @@ async function runYouTubeDownload(id: string, download: YouTubeDownload) {
             }
         });
 
-        // yt-dlp prints no details when it skips a video for being too long or too big
         const line = output.trim().split(/\r?\n/).filter(l => l.startsWith("{") && l.includes("\"filepath\"")).pop();
         const info = line && parseLine<{ title?: string; channel?: string; duration?: number; ext?: string; filepath?: string; }>(line);
         if (!info) throw new Error("Only videos up to an hour long and 100 MB can be added");
@@ -468,28 +439,23 @@ async function runYouTubeDownload(id: string, download: YouTubeDownload) {
             cover: await download.coverSaved
         };
 
-        // Added here rather than by the panel, so the song is kept even if Discord's window reloads first
         await changeIndex({ type: "add", items: [item] });
         download.item = item;
         download.progress = 1;
     } catch (err) {
         download.error = err instanceof Error ? err.message : String(err);
 
-        // A song that isn't added leaves nothing behind
         await download.coverSaved;
         await Promise.all([rm(libraryFilePath(id), { force: true }), rm(coverFilePath(id), { force: true })]).catch(() => { });
     } finally {
-        // Nobody waits for this download, so a failed cleanup can't be allowed to throw
         await rm(download.folder, { recursive: true, force: true }).catch(() => { });
     }
 }
 
-// Starts downloading a YouTube song in the background and returns the id it gets in the library
 export async function startYouTubeDownload(_: IpcMainInvokeEvent, link: string) {
     const videoId = youTubeVideoId(link);
     if (!videoId) throw new Error("That isn't a link to a YouTube video");
 
-    // Pasted again after Discord's window reloaded and forgot it, so the download already running carries on
     for (const [id, running] of youTubeDownloads) {
         if (running.videoId === videoId && !running.item && !running.error) return id;
     }
@@ -515,8 +481,6 @@ export async function startYouTubeDownload(_: IpcMainInvokeEvent, link: string) 
     return id;
 }
 
-// How a background download is doing, with its audio from offset onwards (none for a negative offset).
-// Null once the panel has said it's done with the download.
 export async function getYouTubeDownload(_: IpcMainInvokeEvent, id: string, offset: number) {
     const download = youTubeDownloads.get(checkId(id));
     if (!download) return null;
@@ -526,7 +490,6 @@ export async function getYouTubeDownload(_: IpcMainInvokeEvent, id: string, offs
         title: details?.title || preview?.title,
         channel: details?.channel || preview?.channel,
         duration: details?.duration ?? 0,
-        // Only WebM plays while it downloads: YouTube's M4A files aren't split into the fragments that needs
         streamType: details?.ext === "webm" ? `audio/webm; codecs="${details.acodec ?? "opus"}"` : null,
         cover: download.cover,
         progress: download.progress,
@@ -536,7 +499,6 @@ export async function getYouTubeDownload(_: IpcMainInvokeEvent, id: string, offs
     };
 }
 
-// The panel has the song, or its error, so the download can be forgotten
 export function finishYouTubeDownload(_: IpcMainInvokeEvent, id: string) {
     youTubeDownloads.delete(checkId(id));
 }

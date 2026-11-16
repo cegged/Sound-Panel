@@ -53,7 +53,6 @@ function run(action: () => Promise<unknown>) {
     action().catch(err => showError("Couldn't play this track", err));
 }
 
-// The position changes several times a second, so only this part re-renders for it
 function SeekBar({ fallbackDuration }: { fallbackDuration: number; }) {
     const position = useStore(musicStore, s => s.position);
     const duration = useStore(musicStore, s => s.duration) || fallbackDuration;
@@ -67,7 +66,6 @@ function SeekBar({ fallbackDuration }: { fallbackDuration: number; }) {
     );
 }
 
-// The song's YouTube cover, or a note for songs without one. A ring marks it while it plays.
 function Cover({ track, className, iconSize }: { track: { id: string; cover?: boolean; } | undefined; className: string; iconSize: number; }) {
     const cover = useCoverUrl(track);
 
@@ -83,7 +81,6 @@ function NowPlaying({ tracks, pending }: { tracks: LibraryItem[]; pending: Pendi
     const playing = useStore(musicStore, s => s.playing);
     const { repeatMode, shuffle, musicVolume } = settings.use(["repeatMode", "shuffle", "musicVolume"]);
     const track = tracks.find(t => t.id === currentId);
-    // A YouTube song plays while it's still downloading
     const song = track ? undefined : pending.find(s => s.id === currentId);
     const current = track ?? song;
 
@@ -191,7 +188,6 @@ function TrackRow({ track, active, playing, editing, setEditing }: {
     );
 }
 
-// A YouTube song still downloading. It plays while it downloads, and becomes a normal track once it's saved.
 function PendingRow({ song, active, playing }: { song: PendingSong; active: boolean; playing: boolean; }) {
     const onClick = () => active ? run(toggleMusic) : playPendingSong(song.id);
     const percent = song.progress === null ? null : Math.round(song.progress * 100);
@@ -226,7 +222,6 @@ export function MusicTab() {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [starting, setStarting] = useState(false);
 
-    // A link isn't a search, so the whole playlist stays visible below its card
     const videoId = Native ? youTubeVideoId(query) : null;
     const savedSong = useLibrarySong(videoId);
     const visible = videoId ? tracks : tracks.filter(track => matchesQuery(track.name, query));
@@ -241,11 +236,9 @@ export function MusicTab() {
         playFromYouTube(text.trim())
             .then(
                 result => {
-                    // The card makes way for the song, which waits at the top of the playlist and plays once its audio arrives
                     setQuery(current => current === text ? "" : current);
                     if (!("item" in result)) return;
 
-                    // Another Discord app added it in the meantime
                     const { item } = result;
                     if (item.kind !== "music") {
                         showToast({ text: `"${item.name}" is already in My Sounds` });

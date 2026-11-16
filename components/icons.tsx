@@ -7,15 +7,11 @@
 
 import type { ReactNode } from "react";
 
-// Icons only build their shapes when they render. JSX at module level would run before Discord's React exists
-// and stop Vencord from loading.
-
 export interface IconProps {
     className?: string;
     size?: number;
 }
 
-// Line work uses 2px round strokes, the same weight as Discord's own icons
 const line = { fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round" } as const;
 
 const REPEAT_ARROWS = "M17 2.5l3 3-3 3M4 11.5v-1a5 5 0 0 1 5-5h11M7 21.5l-3-3 3-3M20 12.5v1a5 5 0 0 1-5 5H4";
@@ -135,14 +131,12 @@ export const MicIcon = (props: IconProps) => (
     </Svg>
 );
 
-// The microphone with a slash, like Discord's muted mic
 export const MicOffIcon = (props: IconProps) => (
     <Svg {...props}>
         <path {...line} d="M15.5 9.5V6a3.5 3.5 0 0 0-6.6-1.6M8.5 9v2a3.5 3.5 0 0 0 5.9 2.55M5.5 11a6.5 6.5 0 0 0 10.4 5.2M18.5 11a6.5 6.5 0 0 1-.5 2.5M12 17.5V21M9 21h6M4 4l16 16" />
     </Svg>
 );
 
-// A circle, half filled: how see-through the panel is
 export const TransparencyIcon = (props: IconProps) => (
     <Svg {...props}>
         <circle {...line} cx="12" cy="12" r="8.5" />
@@ -150,7 +144,6 @@ export const TransparencyIcon = (props: IconProps) => (
     </Svg>
 );
 
-// Rounded at the points by its own stroke, like Discord's favorite star
 export const StarIcon = (props: IconProps) => (
     <Svg {...props}>
         <path
@@ -162,7 +155,6 @@ export const StarIcon = (props: IconProps) => (
     </Svg>
 );
 
-// An arrow going in through a door: the sound that plays when you join a voice channel
 export const JoinSoundIcon = (props: IconProps) => (
     <Svg {...props}>
         <path {...line} d="M14 4h3.5A2.5 2.5 0 0 1 20 6.5v11a2.5 2.5 0 0 1-2.5 2.5H14M4 12h11M11 8l4 4-4 4" />
