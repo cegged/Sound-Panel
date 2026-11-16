@@ -135,6 +135,21 @@ export const MicIcon = (props: IconProps) => (
     </Svg>
 );
 
+// The microphone with a slash, like Discord's muted mic
+export const MicOffIcon = (props: IconProps) => (
+    <Svg {...props}>
+        <path {...line} d="M15.5 9.5V6a3.5 3.5 0 0 0-6.6-1.6M8.5 9v2a3.5 3.5 0 0 0 5.9 2.55M5.5 11a6.5 6.5 0 0 0 10.4 5.2M18.5 11a6.5 6.5 0 0 1-.5 2.5M12 17.5V21M9 21h6M4 4l16 16" />
+    </Svg>
+);
+
+// A circle, half filled: how see-through the panel is
+export const TransparencyIcon = (props: IconProps) => (
+    <Svg {...props}>
+        <circle {...line} cx="12" cy="12" r="8.5" />
+        <path d="M12 3.5a8.5 8.5 0 0 0 0 17Z" />
+    </Svg>
+);
+
 export const UploadIcon = (props: IconProps) => (
     <Svg {...props}>
         <path {...line} d={`M12 15V4M7.5 8.5 12 4l4.5 4.5${TRAY}`} />

@@ -47,7 +47,6 @@ function SoundTile({ item, playing, editing, setEditing }: {
             onKeyDown={e => (e.key === "Enter" || e.key === " ") && onClick()}
             onContextMenu={e => openLibraryItemMenu(e, item, () => setEditing(true))}
         >
-            <span className={cl("tile-icon")}><WaveformIcon size={16} /></span>
             {editing ? (
                 <RenameInput
                     initialValue={item.name}
@@ -57,10 +56,10 @@ function SoundTile({ item, playing, editing, setEditing }: {
                     }}
                 />
             ) : (
-                <span className={cl("tile-text")}>
+                <>
                     <span className={cl("tile-name")}>{item.name}</span>
                     {item.duration > 0 && <span className={cl("tile-meta")}>{clipLength(item.duration)}</span>}
-                </span>
+                </>
             )}
         </div>
     );
@@ -88,7 +87,7 @@ export function MySoundsTab() {
                             title="Stop your sounds"
                             onClick={() => items.forEach(item => stopClip(item.id))}
                         >
-                            <StopIcon size={18} />
+                            <StopIcon size={16} />
                         </button>
                     )}
                     <UploadButton kind="sound" label="Add" />

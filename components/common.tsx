@@ -42,7 +42,7 @@ function pickFiles(kind: LibraryKind) {
 
 export function UploadButton({ kind, label }: { kind: LibraryKind; label: string; }) {
     return (
-        <button type="button" className={cl("action-button", "primary")} onClick={() => pickFiles(kind)}>
+        <button type="button" className={cl("action-button")} onClick={() => pickFiles(kind)}>
             <PlusIcon width={16} height={16} />
             <span>{label}</span>
         </button>
@@ -74,7 +74,7 @@ export function FileDropZone({ kind, children }: { kind: LibraryKind; children: 
             {children}
             {dragging && (
                 <div className={cl("dropzone-overlay")}>
-                    <span className={cl("dropzone-icon")}><UploadIcon size={24} /></span>
+                    <UploadIcon size={28} />
                     <span>Drop audio files to add them to {kind === "music" ? "Music" : "My Sounds"}</span>
                 </div>
             )}
@@ -82,7 +82,15 @@ export function FileDropZone({ kind, children }: { kind: LibraryKind; children: 
     );
 }
 
-export function SearchBox({ value, onChange, placeholder }: { value: string; onChange(value: string): void; placeholder: string; }) {
+interface SearchBoxProps {
+    value: string;
+    placeholder: string;
+    onChange(value: string): void;
+    // Returns true when it handled the pasted text, which then stays out of the box
+    onPaste?(text: string): boolean;
+}
+
+export function SearchBox({ value, placeholder, onChange, onPaste }: SearchBoxProps) {
     return (
         <label className={cl("search")}>
             <SearchIcon width={16} height={16} />
@@ -92,6 +100,9 @@ export function SearchBox({ value, onChange, placeholder }: { value: string; onC
                 placeholder={placeholder}
                 spellCheck={false}
                 onChange={e => onChange(e.currentTarget.value)}
+                onPaste={e => {
+                    if (onPaste?.(e.clipboardData.getData("text"))) e.preventDefault();
+                }}
             />
         </label>
     );

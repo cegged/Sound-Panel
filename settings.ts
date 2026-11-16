@@ -14,6 +14,9 @@ import { applyMusicVolume } from "./audio/player";
 export type PanelTab = "server" | "sounds" | "music";
 export type RepeatMode = "off" | "all" | "one";
 
+// See-through enough that the chat behind the panel stays readable, and the panel's own text clear
+export const DEFAULT_TRANSPARENCY = 65;
+
 export const settings = definePluginSettings({
     transmit: {
         type: OptionType.BOOLEAN,
@@ -72,6 +75,13 @@ export const settings = definePluginSettings({
         description: "With the WebRTC engine, send your camera and streams at full quality instead of shrinking them to viewers' window sizes. Uses more bandwidth and CPU",
         default: true,
         hidden: !IS_DISCORD_DESKTOP
+    },
+    transparency: {
+        type: OptionType.SLIDER,
+        description: "How see-through the panel is, from 0% (solid) to 100%. Also in the panel, from the button next to its title",
+        markers: [0, 25, 50, 75, 100],
+        default: DEFAULT_TRANSPARENCY,
+        stickToMarkers: false
     },
     activeTab: {
         type: OptionType.STRING,

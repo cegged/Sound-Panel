@@ -82,7 +82,7 @@ function describeRoute(sound: SoundboardSound, route: SoundRoute) {
 function SoundEmoji({ sound }: { sound: SoundboardSound; }) {
     const src = sound.emojiId ? getEmojiUrl(sound.emojiId) : sound.emojiName && getUnicodeEmojiUrl(sound.emojiName);
     if (src) return <img className={cl("emoji")} src={src} alt="" loading="lazy" />;
-    return sound.emojiName ? <span className={cl("emoji")}>{sound.emojiName}</span> : <SpeakerIcon size={16} />;
+    return sound.emojiName ? <span className={cl("emoji")}>{sound.emojiName}</span> : <SpeakerIcon className={cl("emoji")} size={18} />;
 }
 
 function ServerSoundMenu({ sound, ctx, route }: { sound: SoundboardSound; ctx: SoundContext; route: SoundRoute; }) {
@@ -141,14 +141,17 @@ function ServerSoundTile({ sound, ctx, playing }: { sound: SoundboardSound; ctx:
                     type="button"
                     className={cl("tile", {
                         "tile-local": route.kind === "local",
+                        // Discord's own soundboard plays to the whole channel
+                        "tile-discord": route.kind === "soundboard",
                         "tile-playing": playing || SoundboardStore.isPlayingSound(sound.soundId)
                     })}
                     onClick={onClick}
                     onContextMenu={e => ContextMenuApi.openContextMenu(e, () => <ServerSoundMenu sound={sound} ctx={ctx} route={route} />)}
                 >
-                    <span className={cl("tile-icon")}><SoundEmoji sound={sound} /></span>
+                    <SoundEmoji sound={sound} />
                     <span className={cl("tile-name")}>{sound.name}</span>
-                    {route.kind === "microphone" && <span className={cl("tile-badge")}><MicIcon size={12} /></span>}
+                    {route.kind === "microphone" && <MicIcon className={cl("tile-badge")} size={14} />}
+                    {route.kind === "local" && <HeadphonesIcon className={cl("tile-badge")} size={14} />}
                 </button>
             )}
         </Tooltip>
@@ -159,11 +162,11 @@ const acronym = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 3).
 
 function GroupIcon({ group }: { group: SoundGroup; }) {
     if (group.iconUrl) return <img className={cl("group-icon")} src={group.iconUrl} alt="" />;
-    if (group.id === "favorites") return <span className={cl("group-icon", "group-icon-favorites")}><StarFilled width={12} height={12} /></span>;
+    if (group.id === "favorites") return <span className={cl("group-icon", "group-icon-favorites")}><StarFilled width={14} height={14} /></span>;
 
     return (
         <span className={cl("group-icon", "group-icon-fallback")}>
-            {group.id === "defaults" ? <SoundboardIcon size={12} /> : acronym(group.name)}
+            {group.id === "defaults" ? <SoundboardIcon size={10} /> : acronym(group.name)}
         </span>
     );
 }

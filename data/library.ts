@@ -15,13 +15,25 @@ import type { LibraryItem, LibraryKind, LibraryPatch } from "./libraryIndex";
 import { migrateLegacyLibrary, storage } from "./storage";
 
 export type { LibraryItem, LibraryKind } from "./libraryIndex";
-export type YouTubeStatus = "idle" | "preparing" | "downloading";
+
+// A YouTube song still downloading: it shows in the playlist with its progress until it's saved
+export interface PendingSong {
+    id: string;
+    youtubeId: string;
+    name: string;
+    artist?: string;
+    cover: boolean;
+    duration: number;
+    progress: number | null;
+    // How to play it while it downloads, once yt-dlp has picked the audio
+    streamType: string | null;
+}
 
 const AUDIO_EXTENSIONS = /\.(mp3|wav|ogg|oga|opus|m4a|aac|flac|webm|weba)$/i;
 
 const libraryStore = createStore({ loaded: false, items: [] as LibraryItem[] });
-// Outside the panel, so closing and reopening it keeps showing a download that's still running
-const youTubeStore = createStore({ status: "idle" as YouTubeStatus, progress: null as number | null });
+// Outside the panel, so closing and reopening it keeps showing downloads that are still running
+const pendingStore = createStore({ songs: [] as PendingSong[], preparing: false });
 const fileUrls = new Map<string, string>();
 const coverUrls = new Map<string, string>();
 const coverLoads = new Map<string, Promise<string | null>>();
@@ -106,53 +118,37 @@ export async function addFiles(files: File[], kind: LibraryKind) {
 }
 
 export const isYouTubeLink = (text: string) => !!Native && youTubeVideoId(text) !== null;
-export const useYouTubeStatus = () => useStore(youTubeStore, s => s.status);
-export const useYouTubeProgress = () => useStore(youTubeStore, s => s.progress);
+export const usePendingSongs = () => useStore(pendingStore, s => s.songs);
+export const useYouTubePreparing = () => useStore(pendingStore, s => s.preparing);
+export const getPendingSong = (id: string) => pendingStore.get().songs.find(song => song.id === id);
+export const findPendingSong = (videoId: string) => pendingStore.get().songs.find(song => song.youtubeId === videoId);
+export const findLibrarySong = (videoId: string) => libraryStore.get().items.find(item => item.youtubeId === videoId);
 
-// Errors from the main process arrive as "Error invoking remote method '...': Error: <reason>"
-const nativeReason = (err: unknown) => String((err as Error)?.message ?? err).replace(/^Error invoking remote method '[^']+': (\w*Error: )?/, "");
+export function setPendingSong(song: PendingSong) {
+    const { songs } = pendingStore.get();
+    pendingStore.set({
+        songs: songs.some(s => s.id === song.id) ? songs.map(s => s.id === song.id ? song : s) : [...songs, song]
+    });
+}
 
-// Resolves with the song and whether it was just added
-export async function addFromYouTube(link: string) {
-    if (!Native) throw new Error("YouTube links need the Discord desktop app");
-    if (youTubeStore.get().status !== "idle") throw new Error("Another YouTube link is still downloading");
+export function removePendingSong(id: string) {
+    pendingStore.set({ songs: pendingStore.get().songs.filter(song => song.id !== id) });
+}
 
+// yt-dlp and its JavaScript runtime are downloaded the first time only
+export async function prepareYouTube() {
+    if (!Native || await Native.hasYouTubeTools()) return;
+
+    pendingStore.set({ preparing: true });
     try {
-        await loadLibrary();
-
-        // A song that's already in the library isn't downloaded again
-        const videoId = youTubeVideoId(link);
-        const existing = videoId ? libraryStore.get().items.find(item => item.youtubeId === videoId) : undefined;
-        if (existing) return { item: existing, added: false };
-
-        // yt-dlp and its JavaScript runtime are downloaded the first time only
-        if (!await Native.hasYouTubeTools()) {
-            youTubeStore.set({ status: "preparing" });
-            await Native.prepareYouTubeTools();
-        }
-
-        youTubeStore.set({ status: "downloading", progress: 0 });
-        const poll = setInterval(() => {
-            Native!.getYouTubeProgress().then(progress => {
-                if (progress !== null && youTubeStore.get().status === "downloading") youTubeStore.set({ progress });
-            }, () => { });
-        }, 400);
-
-        try {
-            const download = await Native.downloadYouTubeAudio(link);
-            const item: LibraryItem = { ...download, kind: "music", volume: 1, addedAt: Date.now() };
-
-            setItems(await storage.changeIndex({ type: "add", items: [item] }));
-            return { item, added: true };
-        } finally {
-            clearInterval(poll);
-        }
-    } catch (err) {
-        throw new Error(nativeReason(err), { cause: err });
+        await Native.prepareYouTubeTools();
     } finally {
-        youTubeStore.set({ status: "idle", progress: null });
+        pendingStore.set({ preparing: false });
     }
 }
+
+// Errors from the main process arrive as "Error invoking remote method '...': Error: <reason>"
+export const nativeReason = (err: unknown) => String((err as Error)?.message ?? err).replace(/^Error invoking remote method '[^']+': (\w*Error: )?/, "");
 
 function loadCover(id: string) {
     let load = coverLoads.get(id);
@@ -173,7 +169,7 @@ function loadCover(id: string) {
 }
 
 // The song's cover as an image URL, or null while it loads and for songs without one
-export function useCoverUrl(item: LibraryItem | undefined) {
+export function useCoverUrl(item: { id: string; cover?: boolean; } | undefined) {
     const id = item?.cover ? item.id : null;
     const [, setLoaded] = useState(0);
 

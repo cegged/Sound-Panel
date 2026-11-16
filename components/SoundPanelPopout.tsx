@@ -8,27 +8,27 @@
 import ErrorBoundary from "@components/ErrorBoundary";
 import { openUserProfile } from "@utils/discord";
 import type { Channel, User } from "@vencord/discord-types";
-import { useEffect, UserStore, UserUtils, useState, useStateFromStores } from "@webpack/common";
-import type { ComponentType } from "react";
+import { ContextMenuApi, Menu, useEffect, UserStore, UserUtils, useState, useStateFromStores } from "@webpack/common";
+import type { CSSProperties } from "react";
 
 import { stopAll, useIsPlaying } from "../audio/player";
 import { refreshLibrary } from "../data/library";
-import { PanelTab, settings } from "../settings";
+import { DEFAULT_TRANSPARENCY, PanelTab, settings } from "../settings";
 import { showError } from "../utils/logger";
 import { cl } from "./common";
-import { IconProps, MusicNoteIcon, SoundboardIcon, SoundPanelIcon, StopIcon, WaveformIcon } from "./icons";
+import { StopIcon, TransparencyIcon } from "./icons";
 import { MusicTab } from "./MusicTab";
 import { MySoundsTab } from "./MySoundsTab";
-import { OutputControls } from "./OutputControls";
+import { OutputControls, useTransmitStatus } from "./OutputControls";
 import { ServerSoundsTab } from "./ServerSoundsTab";
 
 // The credit next to the title opens the author's Discord profile
 const AUTHOR = { id: "453743721402466317", username: "c3g" };
 
-const TABS: { id: PanelTab; label: string; icon: ComponentType<IconProps>; }[] = [
-    { id: "server", label: "Soundboard", icon: SoundboardIcon },
-    { id: "sounds", label: "My Sounds", icon: WaveformIcon },
-    { id: "music", label: "Music", icon: MusicNoteIcon }
+const TABS: { id: PanelTab; label: string; }[] = [
+    { id: "server", label: "Soundboard" },
+    { id: "sounds", label: "My Sounds" },
+    { id: "music", label: "Music" }
 ];
 
 // The author's Discord account, fetched once if this Discord app hasn't seen it yet
@@ -65,36 +65,81 @@ function AuthorCredit() {
     );
 }
 
+// The panel's transparency, changed live while the slider moves
+function TransparencyMenu() {
+    const { transparency } = settings.use(["transparency"]);
+
+    return (
+        <Menu.Menu navId="vc-soundpanel-transparency" onClose={ContextMenuApi.closeContextMenu} aria-label="Panel transparency">
+            <Menu.MenuControlItem
+                id="vc-soundpanel-transparency"
+                label="Transparency"
+                control={(props, ref) => (
+                    <Menu.MenuSliderControl
+                        {...props}
+                        ref={ref}
+                        minValue={0}
+                        maxValue={100}
+                        value={transparency}
+                        onChange={(value: number) => settings.store.transparency = Math.round(value)}
+                        renderValue={(value: number) => `${Math.round(value)}%`}
+                    />
+                )}
+            />
+            <Menu.MenuItem
+                id="vc-soundpanel-transparency-reset"
+                label="Reset Transparency"
+                disabled={transparency === DEFAULT_TRANSPARENCY}
+                action={() => settings.store.transparency = DEFAULT_TRANSPARENCY}
+            />
+        </Menu.Menu>
+    );
+}
+
 function SoundPanelPopout({ channel }: { channel?: Channel; }) {
-    const activeTab = settings.use(["activeTab"]).activeTab as PanelTab;
+    const { activeTab, transparency } = settings.use(["activeTab", "transparency"]);
     const isPlaying = useIsPlaying();
+    const status = useTransmitStatus(channel);
+    const live = status.level === "live";
+    const tabIndex = Math.max(0, TABS.findIndex(tab => tab.id === activeTab));
 
     useEffect(() => {
         void refreshLibrary();
     }, []);
 
+    // While the call hears the panel, whatever plays wears Discord's green speaking ring.
+    // The glass gets thinner as transparency goes up: solid at 0%, a fifth of the glass left at 100%.
     return (
-        <div className={cl("popout")} role="dialog" aria-label="Sound Panel">
+        <div
+            className={cl("popout", { live, "on-air": live && isPlaying, solid: transparency === 0 })}
+            style={{ "--vc-soundpanel-opacity": 100 - 0.8 * transparency } as CSSProperties}
+            role="dialog"
+            aria-label="Sound Panel"
+        >
             <header className={cl("header")}>
                 <div className={cl("title-row")}>
-                    <span className={cl("badge")}><SoundPanelIcon size={18} /></span>
-                    <div className={cl("title-group")}>
-                        <span className={cl("title")}>Sound Panel</span>
-                        <AuthorCredit />
-                    </div>
+                    <h2 className={cl("title")}>Sound Panel</h2>
+                    <AuthorCredit />
+                    {isPlaying && (
+                        <button type="button" className={cl("stop-all")} onClick={stopAll}>
+                            <StopIcon size={14} />
+                            Stop all
+                        </button>
+                    )}
                     <button
                         type="button"
-                        className={cl("icon-button", "stop-all")}
-                        aria-label="Stop all"
-                        title="Stop all"
-                        disabled={!isPlaying}
-                        onClick={stopAll}
+                        className={cl("icon-button", "transparency-button")}
+                        aria-label="Transparency"
+                        title="Transparency"
+                        onClick={e => ContextMenuApi.openContextMenu(e, () => <TransparencyMenu />)}
                     >
-                        <StopIcon size={18} />
+                        <TransparencyIcon size={18} />
                     </button>
                 </div>
-                <nav className={cl("tabs")} role="tablist">
-                    {TABS.map(({ id, label, icon: Icon }) => (
+                {/* A segmented control: the thumb slides under the chosen tab */}
+                <nav className={cl("tabs")} role="tablist" style={{ "--vc-soundpanel-tab": tabIndex } as CSSProperties}>
+                    <span className={cl("tab-thumb")} aria-hidden="true" />
+                    {TABS.map(({ id, label }) => (
                         <button
                             key={id}
                             type="button"
@@ -103,8 +148,7 @@ function SoundPanelPopout({ channel }: { channel?: Channel; }) {
                             className={cl("tab-button", { "tab-button-active": activeTab === id })}
                             onClick={() => settings.store.activeTab = id}
                         >
-                            <Icon size={16} />
-                            <span>{label}</span>
+                            {label}
                         </button>
                     ))}
                 </nav>
@@ -116,7 +160,7 @@ function SoundPanelPopout({ channel }: { channel?: Channel; }) {
                         : <ServerSoundsTab channel={channel} />}
             </div>
 
-            <OutputControls channel={channel} />
+            <OutputControls status={status} />
         </div>
     );
 }

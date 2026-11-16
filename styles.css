@@ -19,11 +19,39 @@
     color: var(--text-feedback-positive) !important;
 }
 
-/* Popout shell */
+/*
+ * Popout shell: Liquid Glass, thin enough that Discord's chat stays readable through it.
+ * The panel floats over Discord like a popover, the one layer glass belongs to. Its contents stay
+ * plain: sounds and songs use translucent fills, never glass of their own.
+ */
 
 .vc-soundpanel-popout {
     --vc-soundpanel-accent: var(--control-primary-background-default, var(--brand-500));
+    /* Discord's speaking green. Whatever the call hears wears it as a ring, like a speaking avatar. */
+    --vc-soundpanel-speaking: var(--status-positive, #23a55a);
+    /* Something that plays only for you gets a plain ring instead */
+    --vc-soundpanel-ring: var(--interactive-text-default);
+    /*
+     * The glass takes Discord's own surface color, so every Discord theme tints it. It's thin, with a
+     * light blur, so the chat behind it stays readable, and it dims what's behind so the panel's own
+     * text still stands out.
+     */
+    --vc-soundpanel-glass: color-mix(
+        in oklab,
+        var(--background-surface-high) calc(var(--vc-soundpanel-opacity, 48) * 1%),
+        transparent
+    );
+    --vc-soundpanel-backdrop: blur(4px) saturate(1.4) brightness(0.6);
+    /*
+     * Discord's muted text is tuned for its solid surfaces; on glass it gets brighter. Over chat text it
+     * keeps 5.6:1; only a pure white image behind the panel brings it down to 4:1.
+     */
+    --vc-soundpanel-secondary: color-mix(in oklab, var(--text-muted), var(--text-default) 75%);
+    --vc-soundpanel-sheen: rgb(255 255 255 / 12%);
+    --vc-soundpanel-edge: rgb(255 255 255 / 34%);
+    --vc-soundpanel-thumb: rgb(255 255 255 / 16%);
 
+    position: relative;
     display: flex;
     flex-direction: column;
     width: 480px;
@@ -31,55 +59,94 @@
     height: 620px;
     max-height: calc(100vh - 96px);
     overflow: hidden;
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-md, 12px);
-    background: var(--background-surface-high);
-    box-shadow: var(--shadow-high);
+    border-radius: 26px;
+    background: var(--vc-soundpanel-glass);
+    -webkit-backdrop-filter: var(--vc-soundpanel-backdrop);
+    backdrop-filter: var(--vc-soundpanel-backdrop);
+    box-shadow:
+        inset 0 1px 0 var(--vc-soundpanel-sheen),
+        0 24px 64px rgb(0 0 0 / 38%),
+        0 4px 14px rgb(0 0 0 / 22%);
     color: var(--text-default);
     font-size: 14px;
 }
+
+/* The light-catching rim: bright where light falls on the top edge, faint along the sides */
+.vc-soundpanel-popout::before {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    padding: 1px;
+    border-radius: inherit;
+    background: linear-gradient(
+        170deg,
+        var(--vc-soundpanel-edge),
+        rgb(255 255 255 / 6%) 30%,
+        rgb(255 255 255 / 3%) 70%,
+        rgb(255 255 255 / 12%)
+    );
+    content: "";
+    pointer-events: none;
+    -webkit-mask:
+        linear-gradient(#000 0 0) content-box,
+        linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+}
+
+.theme-light .vc-soundpanel-popout {
+    /* Over chat text the secondary text keeps 5.8:1; a dark image behind the panel brings it to 3.5:1 */
+    --vc-soundpanel-backdrop: blur(4px) saturate(1.3) brightness(1.2);
+    --vc-soundpanel-secondary: color-mix(in oklab, var(--text-muted), var(--text-default) 70%);
+    --vc-soundpanel-sheen: rgb(255 255 255 / 90%);
+    --vc-soundpanel-edge: rgb(255 255 255 / 95%);
+    --vc-soundpanel-thumb: #fff;
+
+    box-shadow:
+        inset 0 1px 0 var(--vc-soundpanel-sheen),
+        0 0 0 1px rgb(0 0 0 / 7%),
+        0 24px 64px rgb(0 0 0 / 18%),
+        0 4px 14px rgb(0 0 0 / 10%);
+}
+
+/* At 0% transparency the glass is solid, so nothing behind it needs blurring */
+.vc-soundpanel-solid {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+
+.vc-soundpanel-live {
+    --vc-soundpanel-ring: var(--vc-soundpanel-speaking);
+}
+
+.vc-soundpanel-popout :is(button, [role="button"], input):focus-visible {
+    outline: 2px solid var(--focus-primary, var(--vc-soundpanel-accent));
+    outline-offset: 2px;
+}
+
+/* Header: no divider, the content fades out beneath it instead */
 
 .vc-soundpanel-header {
     display: flex;
     flex-direction: column;
     gap: 12px;
-    padding: 14px 14px 12px;
+    padding: 16px 16px 6px;
 }
 
 .vc-soundpanel-title-row {
     display: flex;
     align-items: center;
     gap: 10px;
-}
-
-.vc-soundpanel-badge {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    border-radius: var(--radius-sm, 8px);
-    background: linear-gradient(
-        135deg,
-        var(--vc-soundpanel-accent),
-        color-mix(in oklab, var(--vc-soundpanel-accent) 60%, #000)
-    );
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 18%);
-    color: #fff;
-}
-
-.vc-soundpanel-title-group {
-    display: flex;
-    flex: 1;
-    align-items: center;
-    gap: 10px;
-    min-width: 0;
+    min-height: 28px;
 }
 
 .vc-soundpanel-title {
+    margin: 0;
     color: var(--text-strong);
-    font-size: 16px;
+    font-size: 17px;
     font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 22px;
     white-space: nowrap;
 }
 
@@ -90,9 +157,11 @@
     gap: 6px;
     min-width: 0;
     height: 26px;
-    padding: 0 9px 0 4px;
+    /* Pushes Stop all and the transparency button to the right */
+    margin-right: auto;
+    padding: 0 10px 0 4px;
     border: none;
-    border-radius: 6px;
+    border-radius: 999px;
     background: var(--background-mod-normal);
     color: var(--text-default);
     font-size: 13px;
@@ -128,45 +197,86 @@
     white-space: nowrap;
 }
 
-.vc-soundpanel-tabs,
-.vc-soundpanel-source-tabs {
+/* Shows only while something plays. Red, the color of a destructive action */
+.vc-soundpanel-stop-all {
     display: flex;
-    gap: 2px;
-    padding: 3px;
-    border-radius: var(--radius-sm, 8px);
-    background: var(--background-base-lower);
-}
-
-.vc-soundpanel-tab-button {
-    display: flex;
-    flex: 1;
+    flex-shrink: 0;
     align-items: center;
-    justify-content: center;
     gap: 6px;
-    height: 32px;
-    padding: 0 8px;
+    height: 28px;
+    padding: 0 12px 0 10px;
     border: none;
-    border-radius: 6px;
-    background: none;
-    color: var(--interactive-text-default);
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--status-danger) 16%, transparent);
+    color: var(--text-feedback-critical, var(--status-danger));
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
+    animation: vc-soundpanel-fade-in 0.12s ease-out;
     transition:
         background-color 0.15s ease,
         color 0.15s ease;
 }
 
+.vc-soundpanel-transparency-button {
+    width: 30px;
+    height: 30px;
+}
+
+.vc-soundpanel-stop-all:hover {
+    background: var(--status-danger);
+    color: var(--white, #fff);
+}
+
+/* Tabs: a segmented control with a sliding thumb */
+
+.vc-soundpanel-tabs {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    padding: 3px;
+    border-radius: 999px;
+    background: var(--background-mod-subtle);
+}
+
+.vc-soundpanel-tab-thumb {
+    position: absolute;
+    top: 3px;
+    bottom: 3px;
+    left: 3px;
+    width: calc((100% - 6px) / 3);
+    border-radius: 999px;
+    background: var(--vc-soundpanel-thumb);
+    box-shadow:
+        inset 0 1px 0 rgb(255 255 255 / 14%),
+        0 2px 6px rgb(0 0 0 / 18%);
+    transform: translateX(calc(100% * var(--vc-soundpanel-tab, 0)));
+    transition: transform 0.38s cubic-bezier(0.3, 1.3, 0.5, 1);
+}
+
+.vc-soundpanel-tab-button {
+    position: relative;
+    z-index: 1;
+    height: 30px;
+    padding: 0 10px;
+    border: none;
+    border-radius: 999px;
+    background: none;
+    color: var(--interactive-text-default);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: color 0.15s ease;
+}
+
 .vc-soundpanel-tab-button:hover {
-    background: var(--interactive-background-hover);
     color: var(--interactive-text-hover);
 }
 
 .vc-soundpanel-tab-button-active,
 .vc-soundpanel-tab-button-active:hover {
-    background: var(--background-surface-highest);
-    box-shadow: 0 1px 3px rgb(0 0 0 / 24%);
     color: var(--interactive-text-active);
+    font-weight: 600;
 }
 
 .vc-soundpanel-body,
@@ -181,31 +291,48 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 0 14px 10px;
+    padding: 8px 16px 2px;
 }
 
 .vc-soundpanel-toolbar .vc-soundpanel-icon-button {
-    width: 36px;
-    height: 36px;
-    border: 1px solid var(--border-subtle);
+    border-radius: 50%;
     background: var(--background-mod-subtle);
 }
 
+.vc-soundpanel-toolbar .vc-soundpanel-icon-button:hover {
+    background: var(--background-mod-normal);
+}
+
+/* The scroll edge effect: content fades where it meets the header and the footer */
 .vc-soundpanel-scroller {
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    padding: 0 14px 14px;
+    padding: 12px 16px 20px;
+    -webkit-mask-image: linear-gradient(
+        to bottom,
+        transparent,
+        #000 12px,
+        #000 calc(100% - 20px),
+        transparent
+    );
+    mask-image: linear-gradient(
+        to bottom,
+        transparent,
+        #000 12px,
+        #000 calc(100% - 20px),
+        transparent
+    );
     scrollbar-width: thin;
     scrollbar-color: var(--scrollbar-thin-thumb) transparent;
 }
 
 .vc-soundpanel-notice {
-    margin: 0 14px 10px;
-    padding: 8px 10px;
-    border-radius: var(--radius-sm, 8px);
+    margin: 6px 16px 0;
+    padding: 8px 12px;
+    border-radius: 12px;
     background: var(--background-mod-subtle);
-    color: var(--text-muted);
+    color: var(--vc-soundpanel-secondary);
     font-size: 12px;
     line-height: 16px;
 }
@@ -218,22 +345,24 @@
     align-items: center;
     gap: 8px;
     min-width: 0;
-    height: 36px;
-    padding: 0 12px;
-    border: 1px solid var(--input-border-default);
-    border-radius: var(--radius-sm, 8px);
-    background: var(--input-background-default);
-    color: var(--input-icon-default, var(--icon-muted));
+    height: 34px;
+    padding: 0 14px 0 12px;
+    border-radius: 999px;
+    background: var(--background-mod-subtle);
+    color: var(--vc-soundpanel-secondary);
     cursor: text;
-    transition: border-color 0.15s ease;
+    transition:
+        background-color 0.15s ease,
+        box-shadow 0.15s ease;
 }
 
 .vc-soundpanel-search:hover {
-    border-color: var(--input-border-hover);
+    background: var(--background-mod-normal);
 }
 
 .vc-soundpanel-search:focus-within {
-    border-color: var(--input-border-active);
+    background: var(--background-mod-normal);
+    box-shadow: 0 0 0 2px var(--vc-soundpanel-accent);
 }
 
 .vc-soundpanel-search input {
@@ -243,12 +372,12 @@
     border: none;
     outline: none;
     background: none;
-    color: var(--input-text-default, var(--text-default));
+    color: var(--text-strong);
     font-size: 14px;
 }
 
 .vc-soundpanel-search input::placeholder {
-    color: var(--input-placeholder-text-default, var(--text-muted));
+    color: var(--vc-soundpanel-secondary);
 }
 
 .vc-soundpanel-rename-input {
@@ -257,19 +386,20 @@
     height: 26px;
     padding: 0 8px;
     border: 1px solid var(--input-border-active);
-    border-radius: var(--radius-xs, 4px);
+    border-radius: 8px;
     outline: none;
     background: var(--input-background-default);
     color: var(--input-text-default, var(--text-default));
     font-size: 13px;
 }
 
+/* Sliders: a white capsule thumb that turns into a lens of glass while you drag it */
 .vc-soundpanel-range {
     flex: 1;
     min-width: 0;
-    height: 4px;
+    height: 5px;
     margin: 0;
-    border-radius: 2px;
+    border-radius: 3px;
     appearance: none;
     background: linear-gradient(
         to right,
@@ -280,33 +410,41 @@
 }
 
 .vc-soundpanel-range::-webkit-slider-thumb {
-    width: 14px;
+    width: 22px;
     height: 14px;
     border: none;
-    border-radius: 50%;
+    border-radius: 999px;
     appearance: none;
-    background: #fff;
-    box-shadow: 0 1px 4px rgb(0 0 0 / 40%);
-    transition: transform 0.15s ease;
+    background: var(--white, #fff);
+    box-shadow:
+        0 1px 4px rgb(0 0 0 / 35%),
+        0 0 0 0.5px rgb(0 0 0 / 10%);
+    transition:
+        transform 0.25s cubic-bezier(0.3, 1.3, 0.5, 1),
+        background-color 0.2s ease,
+        box-shadow 0.2s ease;
 }
 
 .vc-soundpanel-range::-moz-range-thumb {
-    width: 14px;
+    width: 22px;
     height: 14px;
     border: none;
-    border-radius: 50%;
-    background: #fff;
-    box-shadow: 0 1px 4px rgb(0 0 0 / 40%);
+    border-radius: 999px;
+    background: var(--white, #fff);
+    box-shadow: 0 1px 4px rgb(0 0 0 / 35%);
 }
 
-.vc-soundpanel-range:hover::-webkit-slider-thumb,
+.vc-soundpanel-range:hover::-webkit-slider-thumb {
+    transform: scale(1.1);
+}
+
 .vc-soundpanel-range:active::-webkit-slider-thumb {
-    transform: scale(1.2);
-}
-
-.vc-soundpanel-range:focus-visible {
-    outline: 2px solid var(--border-focus);
-    outline-offset: 4px;
+    background: rgb(255 255 255 / 28%);
+    box-shadow:
+        inset 0 1px 1px rgb(255 255 255 / 85%),
+        inset 0 -1px 1px rgb(0 0 0 / 12%),
+        0 6px 14px rgb(0 0 0 / 28%);
+    transform: scale(1.45);
 }
 
 /* Buttons */
@@ -316,14 +454,26 @@
     flex-shrink: 0;
     align-items: center;
     gap: 6px;
-    height: 36px;
-    padding: 0 14px 0 10px;
+    height: 34px;
+    padding: 0 14px 0 12px;
     border: none;
-    border-radius: var(--radius-sm, 8px);
+    border-radius: 999px;
+    background: var(--background-mod-subtle);
+    color: var(--text-strong);
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
-    transition: background-color 0.15s ease;
+    transition:
+        background-color 0.15s ease,
+        transform 0.1s ease;
+}
+
+.vc-soundpanel-action-button:hover:not(:disabled) {
+    background: var(--background-mod-normal);
+}
+
+.vc-soundpanel-action-button:active:not(:disabled) {
+    transform: scale(0.97);
 }
 
 .vc-soundpanel-action-button:disabled {
@@ -331,8 +481,9 @@
     cursor: default;
 }
 
+/* The one prominent action, colored on its background the way Apple styles a Done button */
 .vc-soundpanel-primary {
-    background: var(--control-primary-background-default, var(--brand-500));
+    background: var(--vc-soundpanel-accent);
     color: var(--control-primary-text-default, #fff);
 }
 
@@ -340,36 +491,32 @@
     background: var(--control-primary-background-hover, var(--brand-560));
 }
 
-.vc-soundpanel-primary:active:not(:disabled) {
-    background: var(--control-primary-background-active, var(--brand-560));
-}
-
 .vc-soundpanel-icon-button {
-    position: relative;
     display: flex;
     flex-shrink: 0;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
+    width: 34px;
+    height: 34px;
     padding: 0;
     border: none;
-    border-radius: var(--radius-sm, 8px);
+    border-radius: 50%;
     background: none;
-    color: var(--interactive-icon-default, var(--icon-muted));
+    color: var(--interactive-icon-default, var(--vc-soundpanel-secondary));
     cursor: pointer;
     transition:
         background-color 0.15s ease,
-        color 0.15s ease;
+        color 0.15s ease,
+        transform 0.1s ease;
 }
 
 .vc-soundpanel-icon-button:hover:not(:disabled) {
-    background: var(--interactive-background-hover);
+    background: var(--background-mod-normal);
     color: var(--interactive-icon-hover, var(--icon-strong));
 }
 
 .vc-soundpanel-icon-button:active:not(:disabled) {
-    background: var(--interactive-background-active);
+    transform: scale(0.92);
 }
 
 .vc-soundpanel-icon-button:disabled {
@@ -377,30 +524,10 @@
     cursor: default;
 }
 
+/* A toggle that's on shows the accent in its symbol, not in a background */
 .vc-soundpanel-icon-button-active,
 .vc-soundpanel-icon-button-active:hover:not(:disabled) {
-    color: var(--text-brand);
-}
-
-/* A dot under toggles that are on, like shuffle and repeat */
-.vc-soundpanel-icon-button-active::after {
-    position: absolute;
-    bottom: 3px;
-    width: 4px;
-    height: 4px;
-    border-radius: 50%;
-    background: currentColor;
-    content: "";
-}
-
-.vc-soundpanel-stop-all:not(:disabled),
-.vc-soundpanel-stop-all:hover:not(:disabled) {
-    background: color-mix(in oklab, var(--status-danger) 12%, transparent);
-    color: var(--status-danger);
-}
-
-.vc-soundpanel-stop-all:hover:not(:disabled) {
-    background: color-mix(in oklab, var(--status-danger) 22%, transparent);
+    color: var(--vc-soundpanel-accent);
 }
 
 .vc-soundpanel-link-button {
@@ -418,28 +545,23 @@
     text-decoration: underline;
 }
 
-/* Sound tiles */
+/* Sound buttons: content, so translucent fills rather than glass */
 
 .vc-soundpanel-group + .vc-soundpanel-group {
-    margin-top: 6px;
+    margin-top: 10px;
 }
 
 .vc-soundpanel-group-header {
-    position: sticky;
-    top: 0;
-    z-index: 1;
     display: flex;
     align-items: center;
     gap: 8px;
     width: 100%;
-    padding: 8px 2px;
+    padding: 4px 4px 8px;
     border: none;
-    background: var(--background-surface-high);
-    color: var(--text-muted);
+    background: none;
+    color: var(--vc-soundpanel-secondary);
     font-size: 12px;
     font-weight: 600;
-    letter-spacing: 0.02em;
-    text-transform: uppercase;
     cursor: pointer;
 }
 
@@ -452,22 +574,20 @@
     flex-shrink: 0;
     align-items: center;
     justify-content: center;
-    width: 20px;
-    height: 20px;
-    border-radius: 6px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
     object-fit: cover;
 }
 
 .vc-soundpanel-group-icon-fallback {
     background: var(--background-mod-strong);
     color: var(--text-default);
-    font-size: 9px;
+    font-size: 7px;
     font-weight: 700;
-    letter-spacing: 0;
 }
 
 .vc-soundpanel-group-icon-favorites {
-    background: color-mix(in oklab, var(--status-warning) 18%, transparent);
     color: var(--status-warning);
 }
 
@@ -480,13 +600,8 @@
 }
 
 .vc-soundpanel-group-count {
-    min-width: 20px;
-    padding: 1px 6px;
-    border-radius: 10px;
-    background: var(--background-mod-subtle);
-    font-size: 11px;
-    letter-spacing: 0;
-    text-align: center;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
 }
 
 .vc-soundpanel-chevron {
@@ -500,35 +615,32 @@
 
 .vc-soundpanel-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(136px, 1fr));
-    gap: 6px;
+    grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+    gap: 8px;
 }
 
 .vc-soundpanel-tile {
-    position: relative;
     display: flex;
     align-items: center;
     gap: 8px;
     min-width: 0;
-    height: 44px;
-    padding: 0 10px 0 6px;
-    overflow: hidden;
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-sm, 8px);
+    height: 42px;
+    padding: 0 12px 0 10px;
+    border: none;
+    border-radius: 14px;
     background: var(--background-mod-subtle);
     color: var(--text-default);
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 500;
     text-align: left;
     cursor: pointer;
     transition:
         background-color 0.15s ease,
-        border-color 0.15s ease,
+        color 0.15s ease,
         transform 0.1s ease;
 }
 
 .vc-soundpanel-tile:hover {
-    border-color: var(--border-normal);
     background: var(--background-mod-normal);
     color: var(--text-strong);
 }
@@ -537,39 +649,26 @@
     transform: scale(0.97);
 }
 
+/* Only you would hear it: muted text and a headphones badge, still readable */
 .vc-soundpanel-tile-local {
-    opacity: 0.6;
+    --vc-soundpanel-ring: var(--interactive-text-default);
+
+    color: var(--vc-soundpanel-secondary);
 }
 
-.vc-soundpanel-tile-icon {
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    border-radius: 6px;
-    background: var(--background-mod-subtle);
-    color: var(--icon-muted);
-    transition:
-        background-color 0.15s ease,
-        color 0.15s ease;
+/* Discord's own soundboard plays to the whole channel */
+.vc-soundpanel-tile-discord {
+    --vc-soundpanel-ring: var(--vc-soundpanel-speaking);
 }
 
 .vc-soundpanel-emoji {
-    width: 22px;
-    height: 22px;
-    font-size: 18px;
-    line-height: 22px;
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    font-size: 17px;
+    line-height: 20px;
     text-align: center;
     object-fit: contain;
-}
-
-.vc-soundpanel-tile-text {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    min-width: 0;
 }
 
 .vc-soundpanel-tile-name {
@@ -581,115 +680,75 @@
 }
 
 .vc-soundpanel-tile-badge {
-    display: flex;
     flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: var(--background-mod-normal);
-    color: var(--icon-muted);
+    color: var(--vc-soundpanel-secondary);
 }
 
 .vc-soundpanel-tile-meta {
-    color: var(--text-muted);
-    font-size: 11px;
+    flex-shrink: 0;
+    color: var(--vc-soundpanel-secondary);
+    font-size: 12px;
     font-weight: 400;
     font-variant-numeric: tabular-nums;
-    line-height: 14px;
 }
 
+/* The signature: a playing sound wears a ring, green when the call hears it, like a speaking video tile */
 .vc-soundpanel-tile-playing,
 .vc-soundpanel-tile-playing:hover {
-    border-color: color-mix(in oklab, var(--vc-soundpanel-accent) 70%, transparent);
-    background: color-mix(in oklab, var(--vc-soundpanel-accent) 16%, transparent);
+    background: var(--background-mod-normal);
+    box-shadow: inset 0 0 0 2px var(--vc-soundpanel-ring);
     color: var(--text-strong);
-}
-
-.vc-soundpanel-tile-playing .vc-soundpanel-tile-icon {
-    background: var(--vc-soundpanel-accent);
-    color: #fff;
-}
-
-.vc-soundpanel-tile-playing::after {
-    position: absolute;
-    inset: auto 0 0;
-    height: 2px;
-    background: linear-gradient(90deg, transparent, var(--vc-soundpanel-accent), transparent);
-    content: "";
-    animation: vc-soundpanel-sweep 1.2s linear infinite;
-}
-
-@keyframes vc-soundpanel-sweep {
-    from {
-        transform: translateX(-100%);
-    }
-    to {
-        transform: translateX(100%);
-    }
+    animation: vc-soundpanel-ring-in 0.16s ease-out;
 }
 
 /* Music */
 
 .vc-soundpanel-now-playing {
-    --vc-soundpanel-hue: 235;
-
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    margin: 0 14px 12px;
+    gap: 12px;
+    margin: 6px 16px 0;
     padding: 14px;
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-md, 12px);
-    background:
-        radial-gradient(
-            120% 140% at 0% 0%,
-            hsl(var(--vc-soundpanel-hue) 80% 60% / 22%),
-            transparent 60%
-        ),
-        var(--background-mod-subtle);
+    border-radius: 20px;
+    background: var(--background-mod-subtle);
 }
 
 .vc-soundpanel-now-playing-info {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 14px;
     min-width: 0;
 }
 
-.vc-soundpanel-now-playing-art {
+.vc-soundpanel-now-playing-art,
+.vc-soundpanel-track-cover {
     display: flex;
     flex-shrink: 0;
     align-items: center;
     justify-content: center;
-    width: 52px;
-    height: 52px;
-    border-radius: var(--radius-sm, 8px);
-    background: linear-gradient(
-        135deg,
-        hsl(var(--vc-soundpanel-hue) 70% 58%),
-        hsl(calc(var(--vc-soundpanel-hue) + 45) 70% 42%)
-    );
-    box-shadow: 0 4px 12px hsl(var(--vc-soundpanel-hue) 70% 25% / 40%);
-    color: #fff;
-    overflow: hidden;
+    background: var(--background-mod-normal);
+    color: var(--vc-soundpanel-secondary);
+}
+
+.vc-soundpanel-now-playing-art {
+    width: 60px;
+    height: 60px;
+    border-radius: 12px;
+    box-shadow: 0 6px 16px rgb(0 0 0 / 28%);
 }
 
 .vc-soundpanel-cover {
     width: 100%;
     height: 100%;
+    border-radius: inherit;
     object-fit: cover;
 }
 
-.vc-soundpanel-now-playing-art-active {
-    animation: vc-soundpanel-breathe 2.4s ease-in-out infinite;
-}
-
-@keyframes vc-soundpanel-breathe {
-    50% {
-        transform: scale(1.05);
-    }
+/* The signature again: the playing song's cover wears the ring a speaking avatar wears */
+.vc-soundpanel-art-playing {
+    outline: 2px solid var(--vc-soundpanel-ring);
+    outline-offset: 2px;
+    animation: vc-soundpanel-outline-in 0.16s ease-out;
 }
 
 .vc-soundpanel-now-playing-text {
@@ -699,79 +758,87 @@
 .vc-soundpanel-now-playing-title {
     overflow: hidden;
     color: var(--text-strong);
-    font-size: 15px;
-    font-weight: 600;
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 22px;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
 .vc-soundpanel-now-playing-subtitle {
     margin-top: 2px;
-    color: var(--text-muted);
-    font-size: 12px;
+    overflow: hidden;
+    color: var(--vc-soundpanel-secondary);
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .vc-soundpanel-seek,
 .vc-soundpanel-inline-volume {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
 }
 
-.vc-soundpanel-inline-volume {
-    color: var(--icon-muted);
-}
-
-.vc-soundpanel-time,
-.vc-soundpanel-volume-value {
+.vc-soundpanel-time {
     flex-shrink: 0;
-    min-width: 34px;
-    color: var(--text-muted);
-    font-size: 11px;
+    min-width: 32px;
+    color: var(--vc-soundpanel-secondary);
+    font-size: 12px;
     font-variant-numeric: tabular-nums;
     text-align: center;
+}
+
+.vc-soundpanel-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
 }
 
 .vc-soundpanel-transport {
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 12px;
-}
-
-.vc-soundpanel-transport .vc-soundpanel-icon-button {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
+    gap: 2px;
 }
 
 .vc-soundpanel-play-button {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 44px;
-    height: 44px;
+    width: 42px;
+    height: 42px;
+    margin: 0 4px;
     padding: 0;
     border: none;
     border-radius: 50%;
-    background: var(--text-strong);
-    box-shadow: 0 2px 8px rgb(0 0 0 / 30%);
-    color: var(--background-surface-high);
+    background: var(--vc-soundpanel-accent);
+    box-shadow: 0 3px 10px rgb(0 0 0 / 25%);
+    color: var(--control-primary-text-default, #fff);
     cursor: pointer;
-    transition: transform 0.15s ease;
+    transition:
+        background-color 0.15s ease,
+        transform 0.12s ease;
 }
 
 .vc-soundpanel-play-button:hover:not(:disabled) {
-    transform: scale(1.06);
+    background: var(--control-primary-background-hover, var(--brand-560));
 }
 
 .vc-soundpanel-play-button:active:not(:disabled) {
-    transform: scale(0.96);
+    transform: scale(0.93);
 }
 
 .vc-soundpanel-play-button:disabled {
     opacity: 0.4;
     cursor: default;
+}
+
+.vc-soundpanel-inline-volume {
+    width: 140px;
+    color: var(--vc-soundpanel-secondary);
 }
 
 .vc-soundpanel-track-list {
@@ -783,10 +850,10 @@
 .vc-soundpanel-track {
     display: flex;
     align-items: center;
-    gap: 10px;
-    min-height: 48px;
-    padding: 0 10px;
-    border-radius: var(--radius-sm, 8px);
+    gap: 12px;
+    min-height: 46px;
+    padding: 0 12px 0 8px;
+    border-radius: 14px;
     cursor: pointer;
     transition: background-color 0.15s ease;
 }
@@ -797,7 +864,7 @@
 
 .vc-soundpanel-track-active,
 .vc-soundpanel-track-active:hover {
-    background: color-mix(in oklab, var(--vc-soundpanel-accent) 14%, transparent);
+    background: var(--background-mod-normal);
 }
 
 .vc-soundpanel-track-active .vc-soundpanel-track-name {
@@ -805,35 +872,10 @@
     font-weight: 600;
 }
 
-.vc-soundpanel-track-index {
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    color: var(--text-muted);
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-}
-
 .vc-soundpanel-track-cover {
-    flex-shrink: 0;
-    width: 36px;
-    height: 36px;
-    border-radius: 6px;
-    object-fit: cover;
-}
-
-.vc-soundpanel-track-cover-empty {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: linear-gradient(
-        135deg,
-        hsl(var(--vc-soundpanel-hue) 70% 58%),
-        hsl(calc(var(--vc-soundpanel-hue) + 45) 70% 42%)
-    );
-    color: #fff;
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
 }
 
 .vc-soundpanel-track-text {
@@ -844,16 +886,15 @@
 }
 
 .vc-soundpanel-track-name {
-    flex: 1;
-    min-width: 0;
     overflow: hidden;
+    font-weight: 500;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
 .vc-soundpanel-track-artist {
     overflow: hidden;
-    color: var(--text-muted);
+    color: var(--vc-soundpanel-secondary);
     font-size: 12px;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -861,41 +902,29 @@
 
 .vc-soundpanel-track-duration {
     flex-shrink: 0;
-    color: var(--text-muted);
+    color: var(--vc-soundpanel-secondary);
     font-size: 12px;
     font-variant-numeric: tabular-nums;
 }
 
-.vc-soundpanel-equalizer {
-    display: flex;
-    align-items: flex-end;
-    gap: 2px;
-    height: 12px;
+/* A YouTube song still downloading: its progress runs along the bottom of the row */
+.vc-soundpanel-track-pending {
+    position: relative;
 }
 
-.vc-soundpanel-equalizer i {
-    width: 3px;
+.vc-soundpanel-track-pending::after {
+    position: absolute;
+    right: 12px;
+    bottom: 2px;
+    left: 8px;
+    height: 2px;
     border-radius: 1px;
-    background: var(--text-brand);
-    animation: vc-soundpanel-bounce 0.9s ease-in-out infinite;
-}
-
-.vc-soundpanel-equalizer i:nth-child(2) {
-    animation-delay: -0.3s;
-}
-
-.vc-soundpanel-equalizer i:nth-child(3) {
-    animation-delay: -0.6s;
-}
-
-@keyframes vc-soundpanel-bounce {
-    0%,
-    100% {
-        height: 3px;
-    }
-    50% {
-        height: 12px;
-    }
+    background: linear-gradient(
+        to right,
+        var(--vc-soundpanel-accent) var(--vc-soundpanel-progress, 0%),
+        var(--background-mod-normal) var(--vc-soundpanel-progress, 0%)
+    );
+    content: "";
 }
 
 /* Empty states and drop zone */
@@ -904,22 +933,16 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 8px;
-    padding: 44px 24px;
-    color: var(--text-muted);
+    gap: 6px;
+    padding: 48px 24px;
+    color: var(--vc-soundpanel-secondary);
     text-align: center;
 }
 
 .vc-soundpanel-empty-icon {
     display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 56px;
-    height: 56px;
     margin-bottom: 4px;
-    border-radius: 50%;
-    background: var(--background-mod-subtle);
-    color: var(--icon-muted);
+    color: var(--vc-soundpanel-secondary);
 }
 
 .vc-soundpanel-empty-title {
@@ -950,37 +973,29 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 12px;
+    gap: 10px;
     border: 2px dashed var(--vc-soundpanel-accent);
-    border-radius: var(--radius-md, 12px);
-    background: color-mix(in oklab, var(--background-surface-high) 85%, transparent);
-    backdrop-filter: blur(4px);
+    border-radius: 20px;
+    background: color-mix(in oklab, var(--background-surface-high) 88%, transparent);
     color: var(--text-strong);
     font-weight: 600;
     pointer-events: none;
 }
 
-.vc-soundpanel-dropzone-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 52px;
-    height: 52px;
-    border-radius: 50%;
-    background: var(--vc-soundpanel-accent);
-    color: #fff;
+.vc-soundpanel-dropzone-overlay svg {
+    color: var(--vc-soundpanel-accent);
 }
 
 /* Screen share picker */
 
 .vc-soundpanel-source-tabs {
     display: inline-flex;
+    gap: 4px;
     margin-bottom: 16px;
 }
 
-.vc-soundpanel-source-tabs .vc-soundpanel-tab-button {
-    flex: none;
-    padding: 0 16px;
+.vc-soundpanel-source-tabs .vc-soundpanel-tab-button-active {
+    background: var(--background-mod-strong);
 }
 
 .vc-soundpanel-source-grid {
@@ -997,7 +1012,7 @@
     min-width: 0;
     padding: 8px;
     border: 2px solid transparent;
-    border-radius: var(--radius-md, 12px);
+    border-radius: 14px;
     background: var(--background-mod-subtle);
     color: var(--text-default);
     text-align: left;
@@ -1013,18 +1028,14 @@
 
 .vc-soundpanel-source-selected,
 .vc-soundpanel-source-selected:hover {
-    border-color: var(--control-primary-background-default, var(--brand-500));
-    background: color-mix(
-        in oklab,
-        var(--control-primary-background-default, var(--brand-500)) 12%,
-        transparent
-    );
+    border-color: var(--vc-soundpanel-accent, var(--brand-500));
+    background: color-mix(in oklab, var(--brand-500) 12%, transparent);
 }
 
 .vc-soundpanel-source-thumbnail {
     width: 100%;
     aspect-ratio: 16 / 9;
-    border-radius: var(--radius-sm, 8px);
+    border-radius: 8px;
     background: var(--background-base-lowest);
     object-fit: contain;
 }
@@ -1058,110 +1069,136 @@
     font-size: 14px;
 }
 
-/* Footer */
+/* Footer: what the call hears. No bar color beneath it; the list fades out above it */
 
 .vc-soundpanel-footer {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    padding: 12px 14px;
-    border-top: 1px solid var(--border-subtle);
-    background: var(--background-base-lower);
+    padding: 4px 16px 16px;
 }
 
 .vc-soundpanel-status {
     display: flex;
-    align-items: center;
+    align-items: baseline;
     gap: 8px;
+    margin: 0;
+    color: var(--vc-soundpanel-secondary);
     font-size: 12px;
     line-height: 16px;
 }
 
-.vc-soundpanel-status-text {
+.vc-soundpanel-status > span {
     flex: 1;
-    color: var(--text-muted);
 }
 
-.vc-soundpanel-status-dot {
-    position: relative;
-    flex-shrink: 0;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--icon-muted);
-}
-
-.vc-soundpanel-status-live .vc-soundpanel-status-dot {
-    background: var(--status-positive);
-}
-
-.vc-soundpanel-status-live .vc-soundpanel-status-dot::after {
-    position: absolute;
-    inset: 0;
-    border-radius: 50%;
-    background: var(--status-positive);
-    content: "";
-    animation: vc-soundpanel-ping 1.8s ease-out infinite;
-}
-
-@keyframes vc-soundpanel-ping {
-    to {
-        opacity: 0;
-        transform: scale(2.6);
-    }
-}
-
-.vc-soundpanel-status-live .vc-soundpanel-status-text {
+.vc-soundpanel-status-live {
     color: var(--text-default);
 }
 
-.vc-soundpanel-status-warning .vc-soundpanel-status-dot {
-    background: var(--status-warning);
+.vc-soundpanel-status-warning {
+    color: var(--text-feedback-warning, var(--status-warning));
 }
 
 .vc-soundpanel-mixer {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 14px;
 }
 
 .vc-soundpanel-mixer-slider {
     display: flex;
     flex: 1;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     min-width: 0;
-    color: var(--icon-muted);
+    color: var(--vc-soundpanel-secondary);
 }
 
-.vc-soundpanel-toggle {
+/* Sends the panel to voice. Red with a slash when off, like Discord's mute button */
+.vc-soundpanel-transmit {
     display: flex;
     flex-shrink: 0;
     align-items: center;
-    gap: 6px;
-    height: 30px;
-    padding: 0 12px 0 10px;
-    border: 1px solid var(--border-normal);
-    border-radius: 15px;
-    background: none;
-    color: var(--interactive-text-default);
-    font-size: 12px;
-    font-weight: 600;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: var(--background-mod-normal);
+    color: var(--interactive-icon-active, var(--icon-strong));
     cursor: pointer;
     transition:
         background-color 0.15s ease,
-        border-color 0.15s ease,
         color 0.15s ease;
 }
 
-.vc-soundpanel-toggle:hover {
-    background: var(--interactive-background-hover);
-    color: var(--interactive-text-hover);
+.vc-soundpanel-transmit:hover {
+    background: var(--background-mod-strong);
 }
 
-.vc-soundpanel-toggle-on,
-.vc-soundpanel-toggle-on:hover {
-    border-color: transparent;
-    background: var(--status-positive);
-    color: #fff;
+.vc-soundpanel-transmit-off {
+    color: var(--status-danger);
+}
+
+/* On air: the call is hearing the panel right now */
+.vc-soundpanel-on-air .vc-soundpanel-transmit {
+    outline: 2px solid var(--vc-soundpanel-speaking);
+    outline-offset: 2px;
+    animation: vc-soundpanel-outline-in 0.16s ease-out;
+}
+
+/* Accessibility: no see-through glass, stronger edges, no moving thumbs when the system asks */
+
+@media (prefers-reduced-transparency: reduce) {
+    .vc-soundpanel-popout {
+        --vc-soundpanel-glass: var(--background-surface-high);
+
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+}
+
+@media (prefers-contrast: more) {
+    .vc-soundpanel-popout {
+        --vc-soundpanel-glass: var(--background-surface-high);
+        --vc-soundpanel-edge: var(--border-strong);
+
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+
+    .vc-soundpanel-tabs,
+    .vc-soundpanel-search,
+    .vc-soundpanel-now-playing,
+    .vc-soundpanel-tile:not(.vc-soundpanel-tile-playing) {
+        box-shadow: inset 0 0 0 1px var(--border-strong);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .vc-soundpanel-tab-thumb,
+    .vc-soundpanel-range::-webkit-slider-thumb {
+        transition: none;
+    }
+}
+
+@keyframes vc-soundpanel-fade-in {
+    from {
+        opacity: 0;
+    }
+}
+
+@keyframes vc-soundpanel-ring-in {
+    from {
+        box-shadow: inset 0 0 0 0 var(--vc-soundpanel-ring);
+    }
+}
+
+@keyframes vc-soundpanel-outline-in {
+    from {
+        outline-color: transparent;
+        outline-offset: 0;
+    }
 }

@@ -6,10 +6,10 @@
  */
 
 import { DATA_DIR } from "@main/utils/constants";
-import { spawn } from "child_process";
+import { execFile, spawn } from "child_process";
 import { createHash, randomUUID } from "crypto";
 import { desktopCapturer, IpcMainInvokeEvent, Session } from "electron";
-import { access, mkdir, readFile, rename, rm, stat, writeFile } from "fs/promises";
+import { access, mkdir, open, readFile, rename, rm, stat, writeFile } from "fs/promises";
 import { basename, dirname, join, resolve } from "path";
 
 import { applyIndexChange, type IndexChange, type LibraryItem } from "./data/libraryIndex";
@@ -60,7 +60,26 @@ let pendingSource: { id: string; audio: boolean; } | null = null;
 const sessionsWithHandler = new WeakSet<Session>();
 let toolsReady: Promise<void> | undefined;
 let ytDlpUpdated = false;
-let youTubeProgress: number | null = null;
+let jsRuntime: Promise<string> | undefined;
+
+// A YouTube song downloading in the background, under the id it gets in the library
+interface YouTubeDownload {
+    videoId: string;
+    folder: string;
+    // The audio file: in the download folder while yt-dlp writes it, in the library once it's done
+    path?: string;
+    preview?: { title: string; channel?: string; };
+    details?: { title?: string; channel?: string; duration?: number; ext?: string; acodec?: string; };
+    coverSaved: Promise<boolean>;
+    cover: boolean;
+    progress: number | null;
+    item?: LibraryItem;
+    error?: string;
+}
+
+const youTubeDownloads = new Map<string, YouTubeDownload>();
+// The most audio one request hands to the panel, so a long song arrives in pieces
+const MAX_CHUNK = 1024 * 1024;
 
 // Ids are UUIDs; anything else could point outside the library folder
 function checkId(id: string) {
@@ -96,8 +115,12 @@ export function readLibraryIndex(_: IpcMainInvokeEvent) {
     return readIndexFile();
 }
 
-// One change at a time, written through a temp file so the index is never left half written
 export function changeLibraryIndex(_: IpcMainInvokeEvent, change: IndexChange) {
+    return changeIndex(change);
+}
+
+// One change at a time, written through a temp file so the index is never left half written
+function changeIndex(change: IndexChange) {
     const task = indexQueue.then(async () => {
         const items = applyIndexChange(await readIndexFile(), change);
 
@@ -308,65 +331,188 @@ async function saveCover(videoId: string, id: string) {
     }
 }
 
-// From 0 to 1 while a YouTube download runs, null otherwise
-export function getYouTubeProgress(_: IpcMainInvokeEvent) {
-    return youTubeProgress;
+// Node.js finds a YouTube video about 3 seconds sooner than QuickJS, but runs YouTube's code with less
+// isolation. Without Node.js 20 or newer on the PATH, QuickJS does it.
+function getJsRuntime(quickJs: string) {
+    return jsRuntime ??= new Promise(resolve => {
+        execFile("node", ["--version"], { windowsHide: true, timeout: 5000 }, (err, stdout) => {
+            const major = Number(/^v(\d+)\./.exec(String(stdout).trim())?.[1] ?? 0);
+            resolve(!err && major >= 20 ? "node" : `quickjs:${quickJs}`);
+        });
+    });
 }
 
-export async function downloadYouTubeAudio(_: IpcMainInvokeEvent, link: string) {
-    const videoId = youTubeVideoId(link);
-    if (!videoId) throw new Error("That isn't a link to a YouTube video");
+// YouTube's oEmbed answers in a fraction of a second, long before yt-dlp has found the video
+async function fetchPreview(videoId: string) {
+    try {
+        const video = encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`);
+        const res = await fetch(`https://www.youtube.com/oembed?format=json&url=${video}`);
+        if (!res.ok) return undefined;
 
-    await prepareTools();
-    const { ytDlp, quickJs } = getTools();
-    const folder = join(DOWNLOADS_DIR, randomUUID());
-    await mkdir(folder, { recursive: true });
-    youTubeProgress = 0;
+        const data: { title?: string; author_name?: string; } = await res.json();
+        return data.title ? { title: data.title, channel: data.author_name } : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+// The bytes of a file from offset onwards, or null when there are none yet
+async function readChunk(path: string, offset: number) {
+    let handle: Awaited<ReturnType<typeof open>>;
+    try {
+        handle = await open(path, "r");
+    } catch (err) {
+        // Not written yet, or just moved into the library
+        if (isMissing(err)) return null;
+        throw err;
+    }
 
     try {
+        const { size } = await handle.stat();
+        const length = Math.min(size - offset, MAX_CHUNK);
+        if (length <= 0) return null;
+
+        const bytes = new Uint8Array(length);
+        const { bytesRead } = await handle.read(bytes, 0, length, offset);
+        return bytes.subarray(0, bytesRead);
+    } finally {
+        await handle.close();
+    }
+}
+
+function parseLine<T>(line: string): T | undefined {
+    try {
+        return JSON.parse(line);
+    } catch {
+        return undefined;
+    }
+}
+
+async function runYouTubeDownload(id: string, download: YouTubeDownload) {
+    try {
+        const { ytDlp, quickJs } = getTools();
+        await mkdir(download.folder, { recursive: true });
+
         const output = await runYtDlpUpToDate(ytDlp, [
             "--ignore-config",
             "--no-playlist",
             "--cache-dir", join(TOOLS_DIR, "cache"),
             "--no-js-runtimes",
-            "--js-runtimes", `quickjs:${quickJs}`,
-            "--format", "bestaudio[ext=m4a]/bestaudio",
+            "--js-runtimes", await getJsRuntime(quickJs),
+            // Stereo Opus first: it plays while it downloads, and leaves out the large surround tracks some videos have
+            "--format", "bestaudio[acodec=opus]/bestaudio[ext=m4a][audio_channels<=2]/bestaudio[audio_channels<=2]/bestaudio",
             "--max-filesize", "100M",
             "--match-filters", "duration <= 3600",
-            "--output", join(folder, "audio.%(ext)s"),
+            "--output", join(download.folder, "audio.%(ext)s"),
+            // Written under its final name from the first byte, so the panel can play it while it grows
+            "--no-part",
             "--progress",
             "--newline",
             "--progress-template", "download:progress %(progress.downloaded_bytes)s %(progress.total_bytes,progress.total_bytes_estimate)s",
+            "--print", "before_dl:%(.{title,channel,duration,ext,acodec})j",
             "--print", "after_move:%(.{title,channel,duration,ext,filepath})j",
-            "--", `https://www.youtube.com/watch?v=${videoId}`
+            "--", `https://www.youtube.com/watch?v=${download.videoId}`
         ], line => {
             const progress = /^progress (\d+) (\d+)/.exec(line);
-            if (progress) youTubeProgress = Math.min(Number(progress[1]) / Number(progress[2]), 1);
+            if (progress) {
+                download.progress = Math.min(Number(progress[1]) / Number(progress[2]), 1);
+            } else if (line.startsWith("{") && !line.includes("\"filepath\"")) {
+                download.details = parseLine(line);
+                if (download.details?.ext) download.path = join(download.folder, `audio.${download.details.ext}`);
+            }
         });
 
         // yt-dlp prints no details when it skips a video for being too long or too big
-        const line = output.trim().split(/\r?\n/).filter(l => l.startsWith("{")).pop();
-        if (!line) throw new Error("Only videos up to an hour long and 100 MB can be added");
+        const line = output.trim().split(/\r?\n/).filter(l => l.startsWith("{") && l.includes("\"filepath\"")).pop();
+        const info = line && parseLine<{ title?: string; channel?: string; duration?: number; ext?: string; filepath?: string; }>(line);
+        if (!info) throw new Error("Only videos up to an hour long and 100 MB can be added");
+        if (!info.filepath || dirname(resolve(info.filepath)) !== resolve(download.folder)) throw new Error("yt-dlp saved the audio somewhere unexpected");
 
-        const info: { title?: string; channel?: string; duration?: number; ext?: string; filepath?: string; } = JSON.parse(line);
-        if (!info.filepath || dirname(resolve(info.filepath)) !== resolve(folder)) throw new Error("yt-dlp saved the audio somewhere unexpected");
-
-        const id = randomUUID();
         await mkdir(FILES_DIR, { recursive: true });
         await rename(info.filepath, libraryFilePath(id));
+        download.path = libraryFilePath(id);
 
-        return {
+        const item: LibraryItem = {
             id,
-            name: info.title || "YouTube audio",
-            artist: info.channel,
-            youtubeId: videoId,
-            cover: await saveCover(videoId, id),
+            name: info.title || download.preview?.title || "YouTube audio",
+            kind: "music",
             mimeType: AUDIO_TYPES[info.ext ?? ""] ?? "audio/webm",
             size: (await stat(libraryFilePath(id))).size,
-            duration: info.duration ?? 0
+            duration: info.duration ?? 0,
+            volume: 1,
+            addedAt: Date.now(),
+            artist: info.channel,
+            youtubeId: download.videoId,
+            cover: await download.coverSaved
         };
+
+        // Added here rather than by the panel, so the song is kept even if Discord's window reloads first
+        await changeIndex({ type: "add", items: [item] });
+        download.item = item;
+        download.progress = 1;
+    } catch (err) {
+        download.error = err instanceof Error ? err.message : String(err);
+
+        // A song that isn't added leaves nothing behind
+        await download.coverSaved;
+        await Promise.all([rm(libraryFilePath(id), { force: true }), rm(coverFilePath(id), { force: true })]).catch(() => { });
     } finally {
-        youTubeProgress = null;
-        await rm(folder, { recursive: true, force: true });
+        // Nobody waits for this download, so a failed cleanup can't be allowed to throw
+        await rm(download.folder, { recursive: true, force: true }).catch(() => { });
     }
+}
+
+// Starts downloading a YouTube song in the background and returns the id it gets in the library
+export async function startYouTubeDownload(_: IpcMainInvokeEvent, link: string) {
+    const videoId = youTubeVideoId(link);
+    if (!videoId) throw new Error("That isn't a link to a YouTube video");
+
+    // Pasted again after Discord's window reloaded and forgot it, so the download already running carries on
+    for (const [id, running] of youTubeDownloads) {
+        if (running.videoId === videoId && !running.item && !running.error) return id;
+    }
+
+    await prepareTools();
+
+    const id = randomUUID();
+    const download: YouTubeDownload = {
+        videoId,
+        folder: join(DOWNLOADS_DIR, id),
+        coverSaved: saveCover(videoId, id),
+        cover: false,
+        progress: null
+    };
+    youTubeDownloads.set(id, download);
+
+    void download.coverSaved.then(saved => { download.cover = saved; });
+    void fetchPreview(videoId).then(preview => { download.preview = preview; });
+    void runYouTubeDownload(id, download);
+
+    return id;
+}
+
+// How a background download is doing, with its audio from offset onwards (none for a negative offset).
+// Null once the panel has said it's done with the download.
+export async function getYouTubeDownload(_: IpcMainInvokeEvent, id: string, offset: number) {
+    const download = youTubeDownloads.get(checkId(id));
+    if (!download) return null;
+
+    const { details, preview } = download;
+    return {
+        title: details?.title || preview?.title,
+        channel: details?.channel || preview?.channel,
+        duration: details?.duration ?? 0,
+        // Only WebM plays while it downloads: YouTube's M4A files aren't split into the fragments that needs
+        streamType: details?.ext === "webm" ? `audio/webm; codecs="${details.acodec ?? "opus"}"` : null,
+        cover: download.cover,
+        progress: download.progress,
+        bytes: offset >= 0 && download.path ? await readChunk(download.path, offset) : null,
+        item: download.item ?? null,
+        error: download.error ?? null
+    };
+}
+
+// The panel has the song, or its error, so the download can be forgotten
+export function finishYouTubeDownload(_: IpcMainInvokeEvent, id: string) {
+    youTubeDownloads.delete(checkId(id));
 }

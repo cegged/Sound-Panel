@@ -15,11 +15,11 @@ import { settings } from "../settings";
 import { useStore } from "../utils/store";
 import { usesWebRTCEngine } from "../webrtc/engine";
 import { cl, RangeSlider } from "./common";
-import { HeadphonesIcon, MicIcon } from "./icons";
+import { HeadphonesIcon, MicIcon, MicOffIcon } from "./icons";
 
-type StatusLevel = "live" | "warning" | "local";
+export type StatusLevel = "live" | "warning" | "local";
 
-interface Status {
+export interface Status {
     level: StatusLevel;
     text: string;
     action?: { label: string; run(): void; };
@@ -27,7 +27,8 @@ interface Status {
 
 const openSettings = () => openPluginModal(plugins.SoundPanel);
 
-function useTransmitStatus(channel: Channel | undefined): Status {
+// Whether the call hears what the panel plays, and if not, why
+export function useTransmitStatus(channel: Channel | undefined): Status {
     const mixing = useStore(mixerStore, s => s.activeMixes > 0);
     const muted = useStateFromStores([MediaEngineStore], isSelfMuted);
     const krisp = useStateFromStores([MediaEngineStore], () => MediaEngineStore.getNoiseCancellation());
@@ -53,42 +54,38 @@ function useTransmitStatus(channel: Channel | undefined): Status {
     return { level: "live", text: "Live. Everyone in the call hears your sounds and music" };
 }
 
-export function OutputControls({ channel }: { channel?: Channel; }) {
-    const status = useTransmitStatus(channel);
+export function OutputControls({ status }: { status: Status; }) {
     const { transmit, voiceVolume, localVolume } = settings.use(["transmit", "voiceVolume", "localVolume"]);
+    const voice = Math.min(voiceVolume, MAX_VOICE_VOLUME);
 
     return (
         <footer className={cl("footer")}>
-            <div className={cl("status", `status-${status.level}`)}>
-                <span className={cl("status-dot")} />
-                <span className={cl("status-text")}>{status.text}</span>
+            <p className={cl("status", `status-${status.level}`)}>
+                <span>{status.text}</span>
                 {status.action && (
                     <button type="button" className={cl("link-button")} onClick={status.action.run}>{status.action.label}</button>
                 )}
-            </div>
+            </p>
 
             <div className={cl("mixer")}>
                 <button
                     type="button"
-                    className={cl("toggle", { "toggle-on": transmit })}
+                    className={cl("transmit", { "transmit-off": !transmit })}
                     aria-pressed={transmit}
+                    aria-label="Send to voice"
                     title={transmit ? "Sending your audio to voice" : "Only you hear your audio"}
                     onClick={() => settings.store.transmit = !transmit}
                 >
-                    <MicIcon size={16} />
-                    <span>{transmit ? "To Voice" : "Local"}</span>
+                    {transmit ? <MicIcon size={18} /> : <MicOffIcon size={18} />}
                 </button>
 
-                <label className={cl("mixer-slider")} title="Volume others hear">
-                    <MicIcon size={16} />
-                    <RangeSlider label="Volume others hear" value={Math.min(voiceVolume, MAX_VOICE_VOLUME)} max={MAX_VOICE_VOLUME} onChange={v => settings.store.voiceVolume = v} />
-                    <span className={cl("volume-value")}>{Math.min(voiceVolume, MAX_VOICE_VOLUME)}%</span>
+                <label className={cl("mixer-slider")} title={`Volume others hear: ${voice}%`}>
+                    <RangeSlider label="Volume others hear" value={voice} max={MAX_VOICE_VOLUME} onChange={v => settings.store.voiceVolume = v} />
                 </label>
 
-                <label className={cl("mixer-slider")} title="Volume you hear">
-                    <HeadphonesIcon size={16} />
+                <label className={cl("mixer-slider")} title={`Volume you hear: ${localVolume}%`}>
+                    <HeadphonesIcon size={18} />
                     <RangeSlider label="Volume you hear" value={localVolume} onChange={v => settings.store.localVolume = v} />
-                    <span className={cl("volume-value")}>{localVolume}%</span>
                 </label>
             </div>
         </footer>

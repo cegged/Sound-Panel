@@ -46,8 +46,9 @@ The **Soundboard** tab has your favorites first, then each server, then Discord'
 |---|---|
 | Normal sound | Plays with Discord's soundboard, same as Discord's own button |
 | Microphone badge | Plays through your microphone, because Discord's soundboard isn't allowed here |
-| Faded sound | Only you hear it. Hover it to see why |
-| Purple sound | It's playing now |
+| Headphones badge | Only you hear it. Hover it to see why |
+| Green ring | It's playing, and the call hears it |
+| Gray ring | It's playing, but only you hear it |
 
 Right-click a sound to choose how it plays, to preview it only for yourself, or to save it to **My Sounds** or **Music**.
 
@@ -76,9 +77,9 @@ Open **Music**, click **Add Music** or drop files, then click a track. You can s
 
 <img src="images/music.png" alt="Music tab" width="420">
 
-To add a song from YouTube, copy its link and paste it into the search box. The button next to it turns into **Add from YouTube** and shows how far the download is once you click it. The song lands in your music with its cover and channel name, and starts playing. Right-click it to open the video on YouTube. The first time, the plugin also downloads the two tools it needs, about 24 MB.
+To play a song from YouTube, copy its link and paste it into the search box. The song starts playing after a few seconds and downloads in the background. Until the download finishes, it sits at the end of your playlist with a progress bar, and you can keep browsing, play other tracks or paste more links. Then it stays in your music with its cover and channel name, and pasting the link again plays that copy. Right-click it to open the video on YouTube. If you type a link instead of pasting it, click **Play from YouTube**. The first time, the plugin also downloads the two tools it needs, about 24 MB.
 
-<img src="images/youtube-link.png" alt="A YouTube link pasted into the Music tab" width="420">
+<img src="images/youtube-link.png" alt="A YouTube song playing in the Music tab while it downloads" width="420">
 
 ## Letting others hear your own sounds
 
@@ -110,6 +111,7 @@ Open them from **Vencord → Plugins → SoundPanel**.
 | **Hold Push To Talk** | On | Keeps transmitting while your audio plays, if you use Push to Talk |
 | **Webrtc Engine** | Off | Desktop app only. Lets others hear your own sounds and music. Needs a restart |
 | **Max Video Quality** | On | Desktop app in WebRTC mode only. Sends your camera and streams at full quality |
+| **Transparency** | 65% | How see-through the panel is, from 0% (solid) to 100%. You can also change it from the half-filled circle next to the panel's title |
 
 ## Installation
 
@@ -193,9 +195,9 @@ On your computer only. The desktop app keeps them in `%APPDATA%\Vencord\SoundPan
 <summary><b>How do YouTube links work?</b></summary>
 <br>
 
-The plugin downloads the song's audio with [yt-dlp](https://github.com/yt-dlp/yt-dlp), which needs the JavaScript engine [QuickJS-NG](https://github.com/quickjs-ng/quickjs) to get past YouTube's checks. The first time you add a link, the plugin downloads both from their official GitHub releases, checks them against their published checksums and keeps them in `%APPDATA%\Vencord\SoundPanel\tools`. When YouTube changes something and downloads stop working, the plugin updates yt-dlp and tries again.
+The plugin downloads the song's audio with [yt-dlp](https://github.com/yt-dlp/yt-dlp), which needs a JavaScript engine to get past YouTube's checks. The first time you add a link, the plugin downloads yt-dlp and the engine [QuickJS-NG](https://github.com/quickjs-ng/quickjs) from their official GitHub releases, checks them against their published checksums and keeps them in `%APPDATA%\Vencord\SoundPanel\tools`. If [Node.js](https://nodejs.org/) 20 or newer is installed, yt-dlp uses it instead, and songs start about 3 seconds sooner. When YouTube changes something and downloads stop working, the plugin updates yt-dlp and tries again.
 
-You can add songs up to an hour long and 100 MB. Discord in a browser can't run these tools, so YouTube links need the desktop app.
+The plugin picks YouTube's Opus audio, about 1 MB per minute, which can play while it downloads. A few videos have no Opus audio; those start once the download finishes. You can add songs up to an hour long and 100 MB. Discord in a browser can't run these tools, so YouTube links need the desktop app.
 
 YouTube's terms only allow downloads where YouTube shows its own download button, and the songs you play to others may be copyrighted. What you play is up to you.
 
