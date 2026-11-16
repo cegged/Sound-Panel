@@ -13,6 +13,7 @@ import { access, mkdir, readFile, rename, rm, stat, writeFile } from "fs/promise
 import { basename, dirname, join, resolve } from "path";
 
 import { applyIndexChange, type IndexChange, type LibraryItem } from "./data/libraryIndex";
+import { youTubeVideoId } from "./utils/youtube";
 
 export interface ScreenSource {
     id: string;
@@ -52,7 +53,6 @@ const TOOL_BUILDS: Record<string, ToolBuild> = {
 };
 const toolBuild: ToolBuild | undefined = TOOL_BUILDS[`${process.platform}-${process.arch}`];
 
-const YOUTUBE_ID = /^[\w-]{11}$/;
 const AUDIO_TYPES: Record<string, string> = { m4a: "audio/mp4", webm: "audio/webm", opus: "audio/ogg", ogg: "audio/ogg", mp3: "audio/mpeg" };
 
 let indexQueue: Promise<unknown> = Promise.resolve();
@@ -243,22 +243,6 @@ export function prepareYouTubeTools(_: IpcMainInvokeEvent) {
     return prepareTools();
 }
 
-function youTubeVideoId(link: string) {
-    let url: URL;
-    try {
-        url = new URL(/^https?:\/\//i.test(link) ? link : `https://${link}`);
-    } catch {
-        return null;
-    }
-
-    const host = url.hostname.replace(/^(www|m|music)\./, "");
-    const id = host === "youtu.be" ? url.pathname.slice(1)
-        : host === "youtube.com" ? url.searchParams.get("v") ?? url.pathname.match(/^\/(?:shorts|live)\/([\w-]+)/)?.[1]
-            : undefined;
-
-    return id && YOUTUBE_ID.test(id) ? id : null;
-}
-
 // yt-dlp reports problems as "ERROR: [youtube] <video id>: <reason>"
 function ytDlpError(stderr: string) {
     const line = stderr.split(/\r?\n/).filter(l => l.startsWith("ERROR:")).pop();
@@ -330,7 +314,7 @@ export function getYouTubeProgress(_: IpcMainInvokeEvent) {
 }
 
 export async function downloadYouTubeAudio(_: IpcMainInvokeEvent, link: string) {
-    const videoId = youTubeVideoId(link.trim());
+    const videoId = youTubeVideoId(link);
     if (!videoId) throw new Error("That isn't a link to a YouTube video");
 
     await prepareTools();

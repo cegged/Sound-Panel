@@ -68,11 +68,64 @@
     color: #fff;
 }
 
-.vc-soundpanel-title {
+.vc-soundpanel-title-group {
+    display: flex;
     flex: 1;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.vc-soundpanel-title {
     color: var(--text-strong);
     font-size: 16px;
     font-weight: 700;
+    white-space: nowrap;
+}
+
+/* The author's avatar and name, as a button to their Discord profile */
+.vc-soundpanel-credit {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    height: 26px;
+    padding: 0 9px 0 4px;
+    border: none;
+    border-radius: 6px;
+    background: var(--background-mod-normal);
+    color: var(--text-default);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+        background-color 0.15s ease,
+        color 0.15s ease,
+        transform 0.1s ease;
+}
+
+.vc-soundpanel-credit:hover {
+    background: var(--background-mod-strong);
+    color: var(--text-strong);
+}
+
+.vc-soundpanel-credit:active {
+    transform: scale(0.97);
+}
+
+.vc-soundpanel-credit-avatar {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--background-mod-strong);
+    object-fit: cover;
+}
+
+.vc-soundpanel-credit-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .vc-soundpanel-tabs,

@@ -226,10 +226,17 @@ export function MusicTab() {
     const addPastedLink = () => {
         const link = query;
         addFromYouTube(link).then(
-            track => {
+            ({ item, added }) => {
                 setQuery(current => current === link ? "" : current);
-                showToast({ text: `Added "${track.name}" to Music`, variant: "success" });
-                run(() => playTrack(track.id));
+                if (item.kind !== "music") {
+                    showToast({ text: `"${item.name}" is already in My Sounds` });
+                    return;
+                }
+
+                showToast(added
+                    ? { text: `Added "${item.name}" to Music`, variant: "success" }
+                    : { text: `"${item.name}" is already in your music` });
+                run(() => playTrack(item.id));
             },
             err => showError(`Couldn't add it from YouTube: ${err.message}`, err)
         );
