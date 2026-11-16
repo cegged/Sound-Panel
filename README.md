@@ -33,9 +33,11 @@ A [Vencord](https://github.com/Vendicated/Vencord) plugin. It adds a button to y
 
 Join a voice channel. The **Sound Panel** button is at the right end of the voice buttons, at the bottom left.
 
-<img src="images/panel-button.png" alt="Sound Panel button in the voice buttons" width="372">
+<img src="images/panel-button.png" alt="Sound Panel button in the voice buttons" width="424">
 
-Use the stop button at the top right to stop everything at once. The bar at the bottom shows whether others can hear your audio, with one volume slider for them and one for you.
+Use the stop button at the top right to stop everything at once. The bar at the bottom shows whether others can hear your audio, with one volume slider for them and one for you. The half-filled circle at the top right sets how see-through the panel is.
+
+<img src="images/transparency.png" alt="Transparency menu of the panel" width="183">
 
 ### 2. Play server sounds
 
@@ -98,6 +100,8 @@ Discord's soundboard sounds need nothing extra. The plugin mixes your own sounds
 
 - **Browser and Vesktop**: they already use it.
 - **Desktop app**: turn on **Webrtc Engine** in the plugin settings, then quit Discord from the system tray and open it again.
+
+<img src="images/settings.png" alt="Webrtc Engine in the plugin settings" width="420">
 
 In WebRTC mode on the desktop app:
 
